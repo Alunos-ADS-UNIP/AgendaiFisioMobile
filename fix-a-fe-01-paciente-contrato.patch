@@ -1,0 +1,2424 @@
+diff --git a/lib/core/network/api_client.dart b/lib/core/network/api_client.dart
+new file mode 100644
+index 0000000..fdc235d
+--- /dev/null
++++ b/lib/core/network/api_client.dart
+@@ -0,0 +1,130 @@
++import 'dart:convert';
++
++import 'package:http/http.dart' as http;
++
++import 'api_exception.dart';
++import 'auth_header_provider.dart';
++
++/// Cliente HTTP único do aplicativo. Centraliza a URL base, a injeção do
++/// Bearer token em chamadas autenticadas e a conversão de erros da API em
++/// [ApiException].
++///
++/// Pensado para ser criado uma vez (ex: num `main.dart` ou num container de
++/// dependências) e injetado em cada `*_api.dart` de feature, como
++/// `PatientApi`. O [authHeaderProvider] deve vir do `session_controller.dart`
++/// do Jonas; enquanto essa parte não existe, qualquer função que devolva
++/// `null` ou um token fixo de teste serve.
++class ApiClient {
++  ApiClient({required this.baseUrl, http.Client? httpClient, this.authHeaderProvider})
++    : _client = httpClient ?? http.Client();
++
++  /// Ex: http://localhost:5048 (emulador Android usa 10.0.2.2 em vez de
++  /// localhost para enxergar o host da máquina).
++  final String baseUrl;
++  final http.Client _client;
++  final AuthHeaderProvider? authHeaderProvider;
++
++  Future<Map<String, dynamic>> get(String path, {bool authenticated = true}) async {
++    final response = await _client.get(
++      Uri.parse('$baseUrl$path'),
++      headers: await _buildHeaders(authenticated: authenticated),
++    );
++    return _decode(response);
++  }
++
++  Future<Map<String, dynamic>> post(
++    String path,
++    Map<String, dynamic> body, {
++    bool authenticated = false,
++  }) async {
++    final response = await _client.post(
++      Uri.parse('$baseUrl$path'),
++      headers: await _buildHeaders(authenticated: authenticated),
++      body: jsonEncode(body),
++    );
++    return _decode(response);
++  }
++
++  Future<Map<String, dynamic>> put(
++    String path,
++    Map<String, dynamic> body, {
++    bool authenticated = true,
++  }) async {
++    final response = await _client.put(
++      Uri.parse('$baseUrl$path'),
++      headers: await _buildHeaders(authenticated: authenticated),
++      body: jsonEncode(body),
++    );
++    return _decode(response);
++  }
++
++  Future<Map<String, String>> _buildHeaders({required bool authenticated}) async {
++    final headers = <String, String>{
++      'Content-Type': 'application/json',
++      'Accept': 'application/json',
++    };
++
++    // Login, cadastro e a documentação da API nunca recebem o Bearer.
++    if (authenticated && authHeaderProvider != null) {
++      final token = await authHeaderProvider!.call();
++      if (token != null && token.isNotEmpty) {
++        headers['Authorization'] = 'Bearer $token';
++      }
++    }
++
++    return headers;
++  }
++
++  Map<String, dynamic> _decode(http.Response response) {
++    dynamic decoded;
++    if (response.body.isNotEmpty) {
++      try {
++        decoded = jsonDecode(response.body);
++      } catch (_) {
++        decoded = null;
++      }
++    }
++
++    final isSuccess = response.statusCode >= 200 && response.statusCode < 300;
++
++    if (isSuccess) {
++      if (decoded is Map<String, dynamic>) return decoded;
++      return <String, dynamic>{};
++    }
++
++    throw _toApiException(response.statusCode, decoded);
++  }
++
++  ApiException _toApiException(int statusCode, dynamic decoded) {
++    if (statusCode == 401) {
++      return ApiException('Sessão expirada. Faça login novamente.', statusCode: 401);
++    }
++
++    if (decoded is Map<String, dynamic>) {
++      // Formato padrão de validação do ASP.NET: { "errors": { "Campo": [...] } }
++      final rawErrors = decoded['errors'];
++      if (rawErrors is Map<String, dynamic>) {
++        final fieldErrors = <String, String>{};
++        rawErrors.forEach((field, messages) {
++          fieldErrors[field] = messages is List
++              ? messages.join(' ')
++              : messages.toString();
++        });
++        return ApiException(
++          decoded['title']?.toString() ?? 'Verifique os campos destacados.',
++          statusCode: statusCode,
++          fieldErrors: fieldErrors,
++        );
++      }
++
++      // Formato usado pelos controllers: { "erro": "..." } ou { "Erro": "..." }
++      final message =
++          decoded['erro'] ?? decoded['Erro'] ?? decoded['mensagem'] ?? decoded['title'];
++      if (message != null) {
++        return ApiException(message.toString(), statusCode: statusCode);
++      }
++    }
++
++    return ApiException('Não foi possível completar a operação.', statusCode: statusCode);
++  }
++}
+diff --git a/lib/core/network/api_exception.dart b/lib/core/network/api_exception.dart
+new file mode 100644
+index 0000000..d69d20c
+--- /dev/null
++++ b/lib/core/network/api_exception.dart
+@@ -0,0 +1,21 @@
++/// Erro lançado pelo [ApiClient] quando a API responde com um status de erro.
++///
++/// [fieldErrors] vem preenchido quando o backend devolve o formato de
++/// validação do ASP.NET (`{ "errors": { "Campo": ["mensagem"] } }`), que é o
++/// mesmo formato usado nos controllers de Paciente e Profissional. Cada chave
++/// já vem com as mensagens concatenadas, prontas para exibir embaixo do
++/// campo correspondente.
++class ApiException implements Exception {
++  ApiException(this.message, {this.statusCode, this.fieldErrors});
++
++  final String message;
++  final int? statusCode;
++  final Map<String, String>? fieldErrors;
++
++  bool get isUnauthorized => statusCode == 401;
++  bool get isConflict => statusCode == 409;
++  bool get isValidation => fieldErrors != null && fieldErrors!.isNotEmpty;
++
++  @override
++  String toString() => message;
++}
+diff --git a/lib/core/network/auth_header_provider.dart b/lib/core/network/auth_header_provider.dart
+new file mode 100644
+index 0000000..8b1a27a
+--- /dev/null
++++ b/lib/core/network/auth_header_provider.dart
+@@ -0,0 +1,8 @@
++/// Função que devolve o header de autorização (ex: "Bearer eyJ...") para
++/// requisições autenticadas, ou `null` quando não há sessão ativa.
++///
++/// O Jonas vai implementar a versão real disso dentro do
++/// `session_controller.dart` (lendo o token do armazenamento seguro). Até lá,
++/// qualquer tela que precise de um [ApiClient] pode passar uma função
++/// provisória, como `() async => null`, sem travar o desenvolvimento.
++typedef AuthHeaderProvider = Future<String?> Function();
+diff --git a/lib/core/utils/input_masks.dart b/lib/core/utils/input_masks.dart
+new file mode 100644
+index 0000000..e32fee9
+--- /dev/null
++++ b/lib/core/utils/input_masks.dart
+@@ -0,0 +1,71 @@
++import 'package:flutter/services.dart';
++
++/// [TextInputFormatter] simples baseado em máscara, sem depender de pacote
++/// externo. '#' no padrão representa um dígito; qualquer outro caractere do
++/// padrão é inserido literalmente conforme o usuário digita.
++///
++/// Importante: isso é só apresentação. O valor com a máscara nunca deve ser
++/// enviado para a API — sempre use [InputMasks.digitsOnly] antes de montar o
++/// corpo da requisição, porque o backend valida CPF (11 dígitos) e telefone
++/// (10 ou 11 dígitos) sem pontuação.
++class MaskedInputFormatter extends TextInputFormatter {
++  MaskedInputFormatter(this.mask);
++
++  final String mask;
++
++  @override
++  TextEditingValue formatEditUpdate(
++    TextEditingValue oldValue,
++    TextEditingValue newValue,
++  ) {
++    final digits = InputMasks.digitsOnly(newValue.text);
++    final buffer = StringBuffer();
++    var digitIndex = 0;
++
++    for (final maskChar in mask.split('')) {
++      if (digitIndex >= digits.length) break;
++      if (maskChar == '#') {
++        buffer.write(digits[digitIndex]);
++        digitIndex++;
++      } else {
++        buffer.write(maskChar);
++      }
++    }
++
++    final formatted = buffer.toString();
++    return TextEditingValue(
++      text: formatted,
++      selection: TextSelection.collapsed(offset: formatted.length),
++    );
++  }
++}
++
++abstract final class InputMasks {
++  static const cpf = '###.###.###-##';
++  static const telefone = '(##) #####-####';
++  static const cep = '#####-###';
++
++  static String digitsOnly(String value) => value.replaceAll(RegExp(r'\D'), '');
++
++  static MaskedInputFormatter cpfFormatter() => MaskedInputFormatter(cpf);
++  static MaskedInputFormatter telefoneFormatter() => MaskedInputFormatter(telefone);
++  static MaskedInputFormatter cepFormatter() => MaskedInputFormatter(cep);
++
++  /// Formata uma string já só com dígitos (como a que vem da API) para
++  /// exibição com máscara. Usado para preencher os campos ao abrir a tela
++  /// de edição com dados existentes.
++  static String applyMask(String mask, String rawDigits) {
++    final buffer = StringBuffer();
++    var digitIndex = 0;
++    for (final maskChar in mask.split('')) {
++      if (digitIndex >= rawDigits.length) break;
++      if (maskChar == '#') {
++        buffer.write(rawDigits[digitIndex]);
++        digitIndex++;
++      } else {
++        buffer.write(maskChar);
++      }
++    }
++    return buffer.toString();
++  }
++}
+diff --git a/lib/core/widgets/app_text_field.dart b/lib/core/widgets/app_text_field.dart
+index d3e29bd..a1c8201 100644
+--- a/lib/core/widgets/app_text_field.dart
++++ b/lib/core/widgets/app_text_field.dart
+@@ -1,4 +1,5 @@
+ import 'package:flutter/material.dart';
++import 'package:flutter/services.dart';
+ 
+ class AppTextField extends StatelessWidget {
+   const AppTextField({
+@@ -16,6 +17,14 @@ class AppTextField extends StatelessWidget {
+     this.enabled = true,
+     this.maxLines = 1,
+     this.autofillHints,
++    // Adicionados pra viabilizar o formulário de perfil do paciente
++    // (A-FE-01): máscara de CPF/telefone/CEP e campo de data só leitura que
++    // abre o date picker ao tocar. Totalmente opcionais e com os mesmos
++    // valores padrão do TextFormField, então nenhum uso existente de
++    // AppTextField muda de comportamento.
++    this.inputFormatters,
++    this.readOnly = false,
++    this.onTap,
+     super.key,
+   });
+ 
+@@ -33,6 +42,9 @@ class AppTextField extends StatelessWidget {
+   final bool enabled;
+   final int maxLines;
+   final Iterable<String>? autofillHints;
++  final List<TextInputFormatter>? inputFormatters;
++  final bool readOnly;
++  final VoidCallback? onTap;
+ 
+   @override
+   Widget build(BuildContext context) {
+@@ -47,6 +59,9 @@ class AppTextField extends StatelessWidget {
+       enabled: enabled,
+       maxLines: obscureText ? 1 : maxLines,
+       autofillHints: autofillHints,
++      inputFormatters: inputFormatters,
++      readOnly: readOnly,
++      onTap: onTap,
+       decoration: InputDecoration(
+         labelText: label,
+         hintText: hint,
+diff --git a/lib/features/patients/data/dtos/patient_dtos.dart b/lib/features/patients/data/dtos/patient_dtos.dart
+new file mode 100644
+index 0000000..21f5080
+--- /dev/null
++++ b/lib/features/patients/data/dtos/patient_dtos.dart
+@@ -0,0 +1,139 @@
++import '../../domain/patient.dart';
++
++/// Quando o paciente ainda não preencheu a data de nascimento, o backend
++/// manda o valor "vazio" padrão do DateTime do C# ("0001-01-01T00:00:00")
++/// em vez de null. Tratamos isso como "sem data" — igual os outros campos
++/// (cpf, telefone etc.) vêm como string vazia nesse caso.
++DateTime? _parseDataNascimento(dynamic value) {
++  final parsed = DateTime.tryParse(value?.toString() ?? '');
++  if (parsed == null || parsed.year <= 1) return null;
++  return parsed;
++}
++
++/// Corpo do POST /api/auth/register para criar uma conta de Paciente.
++/// Segue exatamente o UsuarioRegisterDTO do backend (email, senha,
++/// tipoUsuario).
++class PatientRegisterRequest {
++  const PatientRegisterRequest({required this.email, required this.senha});
++
++  final String email;
++  final String senha;
++
++  Map<String, dynamic> toJson() => {
++    'email': email,
++    'senha': senha,
++    'tipoUsuario': 'Paciente',
++  };
++}
++
++/// Corpo do PUT /api/paciente/completar-perfil.
++///
++/// CONTRATO (PacienteUpdateDTO do backend): os campos de endereço (`rua`,
++/// `numero`, `complemento`, `cep`, `bairro`, `cidade`, `estado`) vão
++/// **direto na raiz** do JSON, junto com os dados pessoais. Já o GET
++/// /api/paciente/me devolve o endereço aninhado em `endereco` (ver
++/// [PatientProfileResponse]) — a assimetria é do backend.
++///
++/// Atenção: se o endereço for aninhado no PUT, o backend responde 200 mas
++/// ignora o endereço inteiro (o GET seguinte volta vazio). O teste de
++/// contrato em test/features/patients/patient_contract_test.dart protege
++/// contra essa regressão.
++class PatientUpdateRequest {
++  const PatientUpdateRequest({
++    required this.nomeCompleto,
++    required this.cpf,
++    required this.telefone,
++    required this.dataNascimento,
++    required this.sexo,
++    required this.estadoCivil,
++    required this.endereco,
++  });
++
++  final String nomeCompleto;
++  final String cpf;
++  final String telefone;
++  final DateTime dataNascimento;
++  final String sexo;
++  final String estadoCivil;
++  final PatientAddress endereco;
++
++  Map<String, dynamic> toJson() => {
++    'nomeCompleto': nomeCompleto,
++    'cpf': cpf,
++    'telefone': telefone,
++    // ISO 8601 (yyyy-MM-dd), formato que o System.DateTime do backend aceita.
++    'dataNascimento': dataNascimento.toIso8601String().split('T').first,
++    'sexo': sexo,
++    'estadoCivil': estadoCivil,
++    // Endereço achatado na raiz, como o PacienteUpdateDTO espera.
++    'rua': endereco.rua,
++    'numero': endereco.numero,
++    'complemento': endereco.complemento,
++    'cep': endereco.cep,
++    'bairro': endereco.bairro,
++    'cidade': endereco.cidade,
++    'estado': endereco.estado,
++  };
++}
++
++/// Resposta do GET /api/paciente/me.
++///
++/// Confirmado via Scalar em 13/10 — os nomes de campo batem com o que foi
++/// previsto aqui (nomeCompleto, cpf, telefone, dataNascimento, sexo,
++/// estadoCivil, endereco{...}, email). Perfil ainda não preenchido vem com
++/// nomeCompleto "Cadastro Pendente" e os demais campos como string vazia.
++class PatientProfileResponse {
++  const PatientProfileResponse({
++    required this.nomeCompleto,
++    required this.cpf,
++    required this.telefone,
++    required this.dataNascimento,
++    required this.sexo,
++    required this.estadoCivil,
++    required this.endereco,
++    required this.email,
++  });
++
++  factory PatientProfileResponse.fromJson(Map<String, dynamic> json) {
++    final enderecoJson = json['endereco'] as Map<String, dynamic>?;
++
++    return PatientProfileResponse(
++      nomeCompleto: json['nomeCompleto']?.toString() ?? '',
++      cpf: json['cpf']?.toString() ?? '',
++      telefone: json['telefone']?.toString() ?? '',
++      dataNascimento: _parseDataNascimento(json['dataNascimento']),
++      sexo: json['sexo']?.toString() ?? '',
++      estadoCivil: json['estadoCivil']?.toString() ?? '',
++      email: json['email']?.toString() ?? '',
++      endereco: PatientAddress(
++        rua: enderecoJson?['rua']?.toString() ?? '',
++        numero: enderecoJson?['numero']?.toString() ?? '',
++        complemento: enderecoJson?['complemento']?.toString() ?? '',
++        cep: enderecoJson?['cep']?.toString() ?? '',
++        bairro: enderecoJson?['bairro']?.toString() ?? '',
++        cidade: enderecoJson?['cidade']?.toString() ?? '',
++        estado: enderecoJson?['estado']?.toString() ?? '',
++      ),
++    );
++  }
++
++  final String nomeCompleto;
++  final String cpf;
++  final String telefone;
++  final DateTime? dataNascimento;
++  final String sexo;
++  final String estadoCivil;
++  final PatientAddress endereco;
++  final String email;
++
++  Patient toDomain() => Patient(
++    nomeCompleto: nomeCompleto,
++    cpf: cpf,
++    telefone: telefone,
++    dataNascimento: dataNascimento,
++    sexo: sexo,
++    estadoCivil: estadoCivil,
++    endereco: endereco,
++    email: email,
++  );
++}
+\ No newline at end of file
+diff --git a/lib/features/patients/data/patient_api.dart b/lib/features/patients/data/patient_api.dart
+new file mode 100644
+index 0000000..62bc385
+--- /dev/null
++++ b/lib/features/patients/data/patient_api.dart
+@@ -0,0 +1,29 @@
++import '../../../core/network/api_client.dart';
++import 'dtos/patient_dtos.dart';
++
++/// Chamadas HTTP da feature de paciente. Nenhuma tela chama [ApiClient]
++/// diretamente — tudo passa por aqui.
++class PatientApi {
++  const PatientApi(this._client);
++
++  final ApiClient _client;
++
++  /// POST /api/auth/register com tipoUsuario "Paciente".
++  /// Não autenticado — é assim que uma conta nasce.
++  Future<void> register(PatientRegisterRequest request) {
++    return _client.post('/api/auth/register', request.toJson(), authenticated: false);
++  }
++
++  /// GET /api/paciente/me — perfil do paciente logado.
++  Future<PatientProfileResponse> getMe() async {
++    final json = await _client.get('/api/paciente/me');
++    return PatientProfileResponse.fromJson(json);
++  }
++
++  /// PUT /api/paciente/completar-perfil — cria ou corrige os dados do
++  /// próprio paciente logado. Nunca envia pacienteId: o backend identifica
++  /// o paciente pelo usuarioId do token.
++  Future<void> completarPerfil(PatientUpdateRequest request) {
++    return _client.put('/api/paciente/completar-perfil', request.toJson());
++  }
++}
+diff --git a/lib/features/patients/data/viacep_client.dart b/lib/features/patients/data/viacep_client.dart
+new file mode 100644
+index 0000000..a358b51
+--- /dev/null
++++ b/lib/features/patients/data/viacep_client.dart
+@@ -0,0 +1,113 @@
++import 'dart:async';
++import 'dart:convert';
++
++import 'package:http/http.dart' as http;
++
++/// Endereço devolvido pelo ViaCEP, já reduzido aos campos que o formulário
++/// do paciente usa. Qualquer campo pode vir vazio (CEPs genéricos de cidade,
++/// por exemplo, não têm logradouro nem bairro).
++class ViaCepAddress {
++  const ViaCepAddress({
++    required this.rua,
++    required this.bairro,
++    required this.cidade,
++    required this.estado,
++  });
++
++  factory ViaCepAddress.fromJson(Map<String, dynamic> json) {
++    String read(String key) => (json[key]?.toString() ?? '').trim();
++    return ViaCepAddress(
++      rua: read('logradouro'),
++      bairro: read('bairro'),
++      cidade: read('localidade'),
++      estado: read('uf'),
++    );
++  }
++
++  final String rua;
++  final String bairro;
++  final String cidade;
++  final String estado;
++}
++
++enum CepLookupFailure {
++  /// O CEP não tem 8 dígitos.
++  invalid,
++
++  /// Formato válido, mas o ViaCEP não conhece o CEP.
++  notFound,
++
++  /// Sem resposta dentro do tempo limite.
++  timeout,
++
++  /// Falha de conexão, status HTTP inesperado ou resposta ilegível.
++  network,
++}
++
++class CepLookupException implements Exception {
++  const CepLookupException(this.failure);
++
++  final CepLookupFailure failure;
++
++  @override
++  String toString() => 'CepLookupException($failure)';
++}
++
++/// Consulta https://viacep.com.br/ws/{cep}/json/.
++///
++/// É só uma ajuda de preenchimento: quem chama deve manter os campos de
++/// endereço editáveis e tratar [CepLookupException] como "preencha à mão".
++class ViaCepClient {
++  ViaCepClient({
++    http.Client? httpClient,
++    this.timeout = const Duration(seconds: 6),
++  }) : _client = httpClient ?? http.Client();
++
++  final http.Client _client;
++  final Duration timeout;
++
++  /// [cep] pode vir com ou sem máscara.
++  Future<ViaCepAddress> lookup(String cep) async {
++    final digits = cep.replaceAll(RegExp(r'\D'), '');
++    if (digits.length != 8) {
++      throw const CepLookupException(CepLookupFailure.invalid);
++    }
++
++    final http.Response response;
++    try {
++      response = await _client
++          .get(Uri.https('viacep.com.br', '/ws/$digits/json/'))
++          .timeout(timeout);
++    } on TimeoutException {
++      throw const CepLookupException(CepLookupFailure.timeout);
++    } catch (_) {
++      throw const CepLookupException(CepLookupFailure.network);
++    }
++
++    // O ViaCEP responde 400 para formato inválido; para CEP bem formado
++    // mas inexistente, responde 200 com {"erro": true}.
++    if (response.statusCode == 400) {
++      throw const CepLookupException(CepLookupFailure.invalid);
++    }
++    if (response.statusCode != 200) {
++      throw const CepLookupException(CepLookupFailure.network);
++    }
++
++    final Object? decoded;
++    try {
++      decoded = jsonDecode(utf8.decode(response.bodyBytes));
++    } catch (_) {
++      throw const CepLookupException(CepLookupFailure.network);
++    }
++    if (decoded is! Map<String, dynamic>) {
++      throw const CepLookupException(CepLookupFailure.network);
++    }
++
++    final erro = decoded['erro'];
++    if (erro == true || erro == 'true') {
++      throw const CepLookupException(CepLookupFailure.notFound);
++    }
++
++    return ViaCepAddress.fromJson(decoded);
++  }
++}
+diff --git a/lib/features/patients/domain/patient.dart b/lib/features/patients/domain/patient.dart
+new file mode 100644
+index 0000000..653a378
+--- /dev/null
++++ b/lib/features/patients/domain/patient.dart
+@@ -0,0 +1,58 @@
++/// Entidade de domínio do paciente — sem nenhuma dependência de widgets ou
++/// de formato de API, só os dados que a tela precisa exibir e editar.
++class PatientAddress {
++  const PatientAddress({
++    this.rua = '',
++    this.numero = '',
++    this.complemento = '',
++    this.cep = '',
++    this.bairro = '',
++    this.cidade = '',
++    this.estado = '',
++  });
++
++  final String rua;
++  final String numero;
++  final String complemento;
++  final String cep;
++  final String bairro;
++  final String cidade;
++  final String estado;
++
++  bool get isEmpty =>
++      rua.isEmpty &&
++      numero.isEmpty &&
++      complemento.isEmpty &&
++      cep.isEmpty &&
++      bairro.isEmpty &&
++      cidade.isEmpty &&
++      estado.isEmpty;
++}
++
++class Patient {
++  const Patient({
++    required this.nomeCompleto,
++    required this.cpf,
++    required this.telefone,
++    required this.dataNascimento,
++    required this.sexo,
++    required this.estadoCivil,
++    required this.endereco,
++    required this.email,
++  });
++
++  final String nomeCompleto;
++  final String cpf;
++  final String telefone;
++  final DateTime? dataNascimento;
++  final String sexo;
++  final String estadoCivil;
++  final PatientAddress endereco;
++  final String email;
++
++  /// Verdadeiro para o perfil ainda não preenchido pelo cadastro
++  /// ("Cadastro Pendente"), que é como o AuthService cria o paciente no
++  /// registro — ajuda a decidir se mostra "Completar perfil" em vez de
++  /// "Editar perfil".
++  bool get isPendingCompletion => nomeCompleto.trim() == 'Cadastro Pendente';
++}
+diff --git a/lib/features/patients/presentation/controllers/patient_profile_controller.dart b/lib/features/patients/presentation/controllers/patient_profile_controller.dart
+new file mode 100644
+index 0000000..b9ff382
+--- /dev/null
++++ b/lib/features/patients/presentation/controllers/patient_profile_controller.dart
+@@ -0,0 +1,48 @@
++import 'package:flutter/foundation.dart';
++
++import '../../../../core/network/api_exception.dart';
++import '../../data/patient_api.dart';
++import '../../domain/patient.dart';
++
++enum PatientProfileStatus { loading, content, error }
++
++/// Controller da tela de visualização do perfil (`patient_profile_page.dart`).
++/// Só lida com o GET /api/paciente/me e os três estados principais da tela.
++class PatientProfileController extends ChangeNotifier {
++  PatientProfileController(this._api);
++
++  final PatientApi _api;
++
++  PatientProfileStatus _status = PatientProfileStatus.loading;
++  PatientProfileStatus get status => _status;
++
++  Patient? _patient;
++  Patient? get patient => _patient;
++
++  String? _errorMessage;
++  String? get errorMessage => _errorMessage;
++
++  bool get isSessionExpired => _sessionExpired;
++  bool _sessionExpired = false;
++
++  Future<void> load() async {
++    _status = PatientProfileStatus.loading;
++    _sessionExpired = false;
++    notifyListeners();
++
++    try {
++      final response = await _api.getMe();
++      _patient = response.toDomain();
++      _status = PatientProfileStatus.content;
++    } on ApiException catch (e) {
++      _errorMessage = e.message;
++      _sessionExpired = e.isUnauthorized;
++      _status = PatientProfileStatus.error;
++    } catch (_) {
++      _errorMessage = 'Não foi possível conectar ao servidor. Verifique sua conexão.';
++      _status = PatientProfileStatus.error;
++    }
++
++    notifyListeners();
++  }
++}
+diff --git a/lib/features/patients/presentation/controllers/patient_profile_form_controller.dart b/lib/features/patients/presentation/controllers/patient_profile_form_controller.dart
+new file mode 100644
+index 0000000..316ad4c
+--- /dev/null
++++ b/lib/features/patients/presentation/controllers/patient_profile_form_controller.dart
+@@ -0,0 +1,61 @@
++import 'package:flutter/foundation.dart';
++
++import '../../../../core/network/api_exception.dart';
++import '../../data/dtos/patient_dtos.dart';
++import '../../data/patient_api.dart';
++
++/// Controller do formulário de edição/completar perfil
++/// (`patient_profile_form_page.dart`). Guarda o estado de envio e os erros
++/// de campo que vieram da API, para exibir embaixo de cada [AppTextField].
++class PatientProfileFormController extends ChangeNotifier {
++  PatientProfileFormController(this._api);
++
++  final PatientApi _api;
++
++  bool _isSubmitting = false;
++  bool get isSubmitting => _isSubmitting;
++
++  Map<String, String> _fieldErrors = {};
++  Map<String, String> get fieldErrors => _fieldErrors;
++
++  String? _generalError;
++  String? get generalError => _generalError;
++
++  /// Retorna true em caso de sucesso, para a página decidir a navegação.
++  Future<bool> submit(PatientUpdateRequest request) async {
++    _isSubmitting = true;
++    _fieldErrors = {};
++    _generalError = null;
++    notifyListeners();
++
++    try {
++      await _api.completarPerfil(request);
++      _isSubmitting = false;
++      notifyListeners();
++      return true;
++    } on ApiException catch (e) {
++      _isSubmitting = false;
++      if (e.isValidation) {
++        _fieldErrors = e.fieldErrors!;
++      } else {
++        _generalError = e.message;
++      }
++      notifyListeners();
++      return false;
++    } catch (_) {
++      _isSubmitting = false;
++      _generalError = 'Não foi possível conectar ao servidor. Verifique sua conexão.';
++      notifyListeners();
++      return false;
++    }
++  }
++
++  /// Mensagem de erro de um campo específico, pelo nome usado no
++  /// [PatientUpdateRequest.toJson] (ex: "nomeCompleto", "cpf"). O ASP.NET
++  /// costuma devolver a chave capitalizada (ex: "NomeCompleto"), então
++  /// conferimos as duas formas.
++  String? errorFor(String field) {
++    return _fieldErrors[field] ??
++        _fieldErrors[field[0].toUpperCase() + field.substring(1)];
++  }
++}
+diff --git a/lib/features/patients/presentation/controllers/patient_register_controller.dart b/lib/features/patients/presentation/controllers/patient_register_controller.dart
+new file mode 100644
+index 0000000..5c0a1e5
+--- /dev/null
++++ b/lib/features/patients/presentation/controllers/patient_register_controller.dart
+@@ -0,0 +1,49 @@
++import 'package:flutter/foundation.dart';
++
++import '../../../../core/network/api_exception.dart';
++import '../../data/dtos/patient_dtos.dart';
++import '../../data/patient_api.dart';
++
++/// Controller da tela de cadastro (`patient_register_page.dart`).
++class PatientRegisterController extends ChangeNotifier {
++  PatientRegisterController(this._api);
++
++  final PatientApi _api;
++
++  bool _isSubmitting = false;
++  bool get isSubmitting => _isSubmitting;
++
++  String? _generalError;
++  String? get generalError => _generalError;
++
++  /// true quando o backend recusou por e-mail já cadastrado — permite
++  /// mostrar uma mensagem/ação diferente ("já tem conta? entrar") em vez de
++  /// um erro genérico.
++  bool _emailJaCadastrado = false;
++  bool get emailJaCadastrado => _emailJaCadastrado;
++
++  Future<bool> submit({required String email, required String senha}) async {
++    _isSubmitting = true;
++    _generalError = null;
++    _emailJaCadastrado = false;
++    notifyListeners();
++
++    try {
++      await _api.register(PatientRegisterRequest(email: email, senha: senha));
++      _isSubmitting = false;
++      notifyListeners();
++      return true;
++    } on ApiException catch (e) {
++      _isSubmitting = false;
++      _emailJaCadastrado = e.message.toLowerCase().contains('e-mail');
++      _generalError = e.message;
++      notifyListeners();
++      return false;
++    } catch (_) {
++      _isSubmitting = false;
++      _generalError = 'Não foi possível conectar ao servidor. Verifique sua conexão.';
++      notifyListeners();
++      return false;
++    }
++  }
++}
+diff --git a/lib/features/patients/presentation/pages/patient_profile_form_page.dart b/lib/features/patients/presentation/pages/patient_profile_form_page.dart
+new file mode 100644
+index 0000000..678980b
+--- /dev/null
++++ b/lib/features/patients/presentation/pages/patient_profile_form_page.dart
+@@ -0,0 +1,486 @@
++import 'package:flutter/material.dart';
++
++import '../../../../core/theme/app_spacing.dart';
++import '../../../../core/utils/input_masks.dart';
++import '../../../../core/widgets/app_primary_button.dart';
++import '../../../../core/widgets/app_text_field.dart';
++import '../../data/dtos/patient_dtos.dart';
++import '../../data/viacep_client.dart';
++import '../../domain/patient.dart';
++import '../controllers/patient_profile_form_controller.dart';
++
++/// Formulário de completar/editar o perfil do paciente.
++/// PUT /api/paciente/completar-perfil.
++///
++/// Campos opcionais que o paciente deixar em branco aqui não devem apagar
++/// valores já salvos — por isso a tela sempre abre pré-preenchida com o
++/// [currentPatient] vindo do GET /me, em vez de abrir vazia.
++class PatientProfileFormPage extends StatefulWidget {
++  const PatientProfileFormPage({
++    required this.controller,
++    required this.currentPatient,
++    required this.onSaved,
++    this.cepLookup,
++    super.key,
++  });
++
++  final PatientProfileFormController controller;
++  final Patient currentPatient;
++  final VoidCallback onSaved;
++
++  /// Consulta de CEP usada para preencher rua/bairro/cidade/estado. Por
++  /// padrão usa o [ViaCepClient]; só é injetável para testes.
++  final Future<ViaCepAddress> Function(String cep)? cepLookup;
++
++  @override
++  State<PatientProfileFormPage> createState() => _PatientProfileFormPageState();
++}
++
++enum _CepStatus { idle, loading, notFound, timeout, failed }
++
++class _PatientProfileFormPageState extends State<PatientProfileFormPage> {
++  final _formKey = GlobalKey<FormState>();
++
++  late final Future<ViaCepAddress> Function(String cep) _lookupCep =
++      widget.cepLookup ?? ViaCepClient().lookup;
++  _CepStatus _cepStatus = _CepStatus.idle;
++
++  /// Identifica a consulta de CEP mais recente; respostas de consultas
++  /// anteriores (usuário continuou digitando) são descartadas.
++  int _cepRequest = 0;
++
++  // "Cadastro Pendente" é só o placeholder que o backend usa pra nome ainda
++  // não preenchido (ver Patient.isPendingCompletion) — não deve aparecer
++  // pré-preenchido no formulário como se fosse um nome de verdade.
++  late final _nomeController = TextEditingController(
++    text: widget.currentPatient.isPendingCompletion
++        ? ''
++        : widget.currentPatient.nomeCompleto,
++  );
++  late final _cpfController = TextEditingController(
++    text: InputMasks.applyMask(InputMasks.cpf, widget.currentPatient.cpf),
++  );
++  late final _telefoneController = TextEditingController(
++    text: InputMasks.applyMask(
++      InputMasks.telefone,
++      widget.currentPatient.telefone,
++    ),
++  );
++  late final _dataNascimentoController = TextEditingController(
++    text: widget.currentPatient.dataNascimento == null
++        ? ''
++        : _formatDate(widget.currentPatient.dataNascimento!),
++  );
++  late String _sexo = widget.currentPatient.sexo.isEmpty
++      ? ''
++      : widget.currentPatient.sexo;
++  late String _estadoCivil = widget.currentPatient.estadoCivil.isEmpty
++      ? ''
++      : widget.currentPatient.estadoCivil;
++
++  late final _ruaController = TextEditingController(
++    text: widget.currentPatient.endereco.rua,
++  );
++  late final _numeroController = TextEditingController(
++    text: widget.currentPatient.endereco.numero,
++  );
++  late final _complementoController = TextEditingController(
++    text: widget.currentPatient.endereco.complemento,
++  );
++  late final _cepController = TextEditingController(
++    text: InputMasks.applyMask(
++      InputMasks.cep,
++      widget.currentPatient.endereco.cep,
++    ),
++  );
++  late final _bairroController = TextEditingController(
++    text: widget.currentPatient.endereco.bairro,
++  );
++  late final _cidadeController = TextEditingController(
++    text: widget.currentPatient.endereco.cidade,
++  );
++  late final _estadoController = TextEditingController(
++    text: widget.currentPatient.endereco.estado,
++  );
++
++  late DateTime? _dataNascimentoSelecionada =
++      widget.currentPatient.dataNascimento;
++
++  @override
++  void initState() {
++    super.initState();
++    widget.controller.addListener(_onControllerChanged);
++  }
++
++  @override
++  void dispose() {
++    _cepRequest++;
++    widget.controller.removeListener(_onControllerChanged);
++    _nomeController.dispose();
++    _cpfController.dispose();
++    _telefoneController.dispose();
++    _dataNascimentoController.dispose();
++    _ruaController.dispose();
++    _numeroController.dispose();
++    _complementoController.dispose();
++    _cepController.dispose();
++    _bairroController.dispose();
++    _cidadeController.dispose();
++    _estadoController.dispose();
++    super.dispose();
++  }
++
++  void _onControllerChanged() => setState(() {});
++
++  /// Chamado só quando o usuário edita o CEP (não quando a tela abre
++  /// pré-preenchida). Com 8 dígitos consulta o ViaCEP e preenche rua,
++  /// bairro, cidade e estado — os campos continuam editáveis, e número e
++  /// complemento nunca são tocados. Qualquer falha cai no preenchimento
++  /// manual, sem bloquear o formulário.
++  Future<void> _onCepChanged(String value) async {
++    final digits = InputMasks.digitsOnly(value);
++    final request = ++_cepRequest;
++
++    if (digits.length != 8) {
++      if (_cepStatus != _CepStatus.idle) {
++        setState(() => _cepStatus = _CepStatus.idle);
++      }
++      return;
++    }
++
++    setState(() => _cepStatus = _CepStatus.loading);
++
++    try {
++      final address = await _lookupCep(digits);
++      if (!mounted || request != _cepRequest) return;
++      setState(() {
++        _fillIfNotEmpty(_ruaController, address.rua);
++        _fillIfNotEmpty(_bairroController, address.bairro);
++        _fillIfNotEmpty(_cidadeController, address.cidade);
++        _fillIfNotEmpty(_estadoController, address.estado);
++        _cepStatus = _CepStatus.idle;
++      });
++    } on CepLookupException catch (e) {
++      if (!mounted || request != _cepRequest) return;
++      setState(() {
++        _cepStatus = switch (e.failure) {
++          CepLookupFailure.notFound => _CepStatus.notFound,
++          CepLookupFailure.timeout => _CepStatus.timeout,
++          _ => _CepStatus.failed,
++        };
++      });
++    } catch (_) {
++      if (!mounted || request != _cepRequest) return;
++      setState(() => _cepStatus = _CepStatus.failed);
++    }
++  }
++
++  // Campos que o ViaCEP não souber (ex.: CEP geral de cidade, sem rua)
++  // mantêm o que o usuário já tinha digitado.
++  static void _fillIfNotEmpty(TextEditingController controller, String value) {
++    if (value.isNotEmpty) controller.text = value;
++  }
++
++  Widget _cepFeedback() {
++    final message = switch (_cepStatus) {
++      _CepStatus.notFound =>
++        'CEP não encontrado. Preencha o endereço manualmente.',
++      _CepStatus.timeout =>
++        'A consulta do CEP demorou demais. Preencha o endereço manualmente.',
++      _CepStatus.failed =>
++        'Não foi possível consultar o CEP. Preencha o endereço manualmente.',
++      _CepStatus.idle || _CepStatus.loading => null,
++    };
++    if (message == null) return const SizedBox.shrink();
++    return Padding(
++      padding: const EdgeInsets.only(top: 4, left: 4),
++      child: Text(
++        message,
++        style: TextStyle(
++          color: Theme.of(context).colorScheme.onSurfaceVariant,
++          fontSize: 12,
++        ),
++      ),
++    );
++  }
++
++  static String _formatDate(DateTime date) =>
++      '${date.day.toString().padLeft(2, '0')}/${date.month.toString().padLeft(2, '0')}/${date.year}';
++
++  Future<void> _pickDataNascimento() async {
++    final now = DateTime.now();
++    final picked = await showDatePicker(
++      context: context,
++      initialDate: _dataNascimentoSelecionada ?? DateTime(now.year - 30),
++      firstDate: DateTime(1900),
++      lastDate: now,
++      helpText: 'Data de nascimento',
++    );
++    if (picked != null) {
++      setState(() {
++        _dataNascimentoSelecionada = picked;
++        _dataNascimentoController.text = _formatDate(picked);
++      });
++    }
++  }
++
++  Future<void> _submit() async {
++    if (!(_formKey.currentState?.validate() ?? false)) return;
++    if (_dataNascimentoSelecionada == null) {
++      setState(() {}); // força reexibir o validator da data
++      return;
++    }
++
++    final request = PatientUpdateRequest(
++      nomeCompleto: _nomeController.text.trim(),
++      cpf: InputMasks.digitsOnly(_cpfController.text),
++      telefone: InputMasks.digitsOnly(_telefoneController.text),
++      dataNascimento: _dataNascimentoSelecionada!,
++      sexo: _sexo,
++      estadoCivil: _estadoCivil,
++      endereco: PatientAddress(
++        rua: _ruaController.text.trim(),
++        numero: _numeroController.text.trim(),
++        complemento: _complementoController.text.trim(),
++        cep: InputMasks.digitsOnly(_cepController.text),
++        bairro: _bairroController.text.trim(),
++        cidade: _cidadeController.text.trim(),
++        estado: _estadoController.text.trim(),
++      ),
++    );
++
++    final success = await widget.controller.submit(request);
++    if (success && mounted) {
++      widget.onSaved();
++    }
++  }
++
++  @override
++  Widget build(BuildContext context) {
++    final controller = widget.controller;
++
++    return Scaffold(
++      appBar: AppBar(title: const Text('Editar perfil')),
++      body: SafeArea(
++        child: SingleChildScrollView(
++          padding: const EdgeInsets.all(AppSpacing.lg),
++          child: Form(
++            key: _formKey,
++            child: Column(
++              crossAxisAlignment: CrossAxisAlignment.stretch,
++              children: [
++                Text(
++                  'Dados pessoais',
++                  style: Theme.of(context).textTheme.titleLarge,
++                ),
++                const SizedBox(height: AppSpacing.md),
++                AppTextField(
++                  label: 'Nome completo',
++                  controller: _nomeController,
++                  textInputAction: TextInputAction.next,
++                  validator: (v) => (v == null || v.trim().isEmpty)
++                      ? 'Informe seu nome completo.'
++                      : null,
++                ),
++                _fieldError(controller, 'nomeCompleto'),
++                const SizedBox(height: AppSpacing.md),
++                AppTextField(
++                  label: 'CPF',
++                  controller: _cpfController,
++                  keyboardType: TextInputType.number,
++                  textInputAction: TextInputAction.next,
++                  inputFormatters: [InputMasks.cpfFormatter()],
++                  validator: (v) {
++                    final digits = InputMasks.digitsOnly(v ?? '');
++                    if (digits.length != 11) return 'CPF deve ter 11 dígitos.';
++                    return null;
++                  },
++                ),
++                _fieldError(controller, 'cpf'),
++                const SizedBox(height: AppSpacing.md),
++                AppTextField(
++                  label: 'Telefone',
++                  controller: _telefoneController,
++                  keyboardType: TextInputType.phone,
++                  textInputAction: TextInputAction.next,
++                  inputFormatters: [InputMasks.telefoneFormatter()],
++                  validator: (v) {
++                    final digits = InputMasks.digitsOnly(v ?? '');
++                    if (digits.length < 10 || digits.length > 11) {
++                      return 'Telefone deve ter 10 ou 11 dígitos, com DDD.';
++                    }
++                    return null;
++                  },
++                ),
++                _fieldError(controller, 'telefone'),
++                const SizedBox(height: AppSpacing.md),
++                AppTextField(
++                  label: 'Data de nascimento',
++                  controller: _dataNascimentoController,
++                  readOnly: true,
++                  onTap: _pickDataNascimento,
++                  suffixIcon: const Icon(Icons.calendar_today_outlined),
++                  validator: (_) => _dataNascimentoSelecionada == null
++                      ? 'Selecione a data de nascimento.'
++                      : null,
++                ),
++                _fieldError(controller, 'dataNascimento'),
++                const SizedBox(height: AppSpacing.md),
++                _ChoiceField(
++                  label: 'Sexo',
++                  value: _sexo,
++                  options: const ['Feminino', 'Masculino', 'Outro'],
++                  onChanged: (value) => setState(() => _sexo = value),
++                ),
++                const SizedBox(height: AppSpacing.md),
++                _ChoiceField(
++                  label: 'Estado civil',
++                  value: _estadoCivil,
++                  options: const [
++                    'Solteiro(a)',
++                    'Casado(a)',
++                    'Divorciado(a)',
++                    'Viúvo(a)',
++                  ],
++                  onChanged: (value) => setState(() => _estadoCivil = value),
++                ),
++                const SizedBox(height: AppSpacing.lg),
++                Text('Endereço', style: Theme.of(context).textTheme.titleLarge),
++                const SizedBox(height: AppSpacing.md),
++                AppTextField(
++                  label: 'CEP',
++                  controller: _cepController,
++                  keyboardType: TextInputType.number,
++                  inputFormatters: [InputMasks.cepFormatter()],
++                  onChanged: _onCepChanged,
++                  suffixIcon: _cepStatus == _CepStatus.loading
++                      ? const Padding(
++                          padding: EdgeInsets.all(14),
++                          child: SizedBox(
++                            width: 20,
++                            height: 20,
++                            child: CircularProgressIndicator(strokeWidth: 2),
++                          ),
++                        )
++                      : null,
++                ),
++                _cepFeedback(),
++                _fieldError(controller, 'cep'),
++                const SizedBox(height: AppSpacing.md),
++                AppTextField(label: 'Rua', controller: _ruaController),
++                const SizedBox(height: AppSpacing.md),
++                Row(
++                  children: [
++                    Expanded(
++                      child: AppTextField(
++                        label: 'Número',
++                        controller: _numeroController,
++                        keyboardType: TextInputType.number,
++                      ),
++                    ),
++                    const SizedBox(width: AppSpacing.md),
++                    Expanded(
++                      flex: 2,
++                      child: AppTextField(
++                        label: 'Complemento',
++                        controller: _complementoController,
++                      ),
++                    ),
++                  ],
++                ),
++                const SizedBox(height: AppSpacing.md),
++                AppTextField(label: 'Bairro', controller: _bairroController),
++                const SizedBox(height: AppSpacing.md),
++                Row(
++                  children: [
++                    Expanded(
++                      flex: 2,
++                      child: AppTextField(
++                        label: 'Cidade',
++                        controller: _cidadeController,
++                      ),
++                    ),
++                    const SizedBox(width: AppSpacing.md),
++                    Expanded(
++                      child: AppTextField(
++                        label: 'Estado',
++                        controller: _estadoController,
++                      ),
++                    ),
++                  ],
++                ),
++                if (controller.generalError != null) ...[
++                  const SizedBox(height: AppSpacing.md),
++                  Text(
++                    controller.generalError!,
++                    style: TextStyle(
++                      color: Theme.of(context).colorScheme.error,
++                    ),
++                  ),
++                ],
++                const SizedBox(height: AppSpacing.lg),
++                AppPrimaryButton(
++                  label: 'Salvar',
++                  isLoading: controller.isSubmitting,
++                  onPressed: _submit,
++                ),
++              ],
++            ),
++          ),
++        ),
++      ),
++    );
++  }
++
++  Widget _fieldError(PatientProfileFormController controller, String field) {
++    final message = controller.errorFor(field);
++    if (message == null) return const SizedBox.shrink();
++    return Padding(
++      padding: const EdgeInsets.only(top: 4, left: 4),
++      child: Text(
++        message,
++        style: TextStyle(
++          color: Theme.of(context).colorScheme.error,
++          fontSize: 12,
++        ),
++      ),
++    );
++  }
++}
++
++class _ChoiceField extends StatelessWidget {
++  const _ChoiceField({
++    required this.label,
++    required this.value,
++    required this.options,
++    required this.onChanged,
++  });
++
++  final String label;
++  final String value;
++  final List<String> options;
++  final ValueChanged<String> onChanged;
++
++  @override
++  Widget build(BuildContext context) {
++    // O backend pode guardar um valor que não bate exatamente com nenhuma
++    // das opções fixas (acentuação/maiúscula diferente, ou valor antigo).
++    // O DropdownButtonFormField lança assertion se o initialValue não
++    // estiver em `items` — então, em vez de travar a tela ou descartar o
++    // dado, o valor real entra como uma opção extra no topo da lista.
++    final resolvedOptions = (value.isNotEmpty && !options.contains(value))
++        ? [value, ...options]
++        : options;
++
++    return DropdownButtonFormField<String>(
++      initialValue: value.isEmpty ? null : value,
++      decoration: InputDecoration(labelText: label),
++      items: resolvedOptions
++          .map((option) => DropdownMenuItem(value: option, child: Text(option)))
++          .toList(),
++      onChanged: (selected) {
++        if (selected != null) onChanged(selected);
++      },
++    );
++  }
++}
+diff --git a/lib/features/patients/presentation/pages/patient_profile_page.dart b/lib/features/patients/presentation/pages/patient_profile_page.dart
+new file mode 100644
+index 0000000..56eb4ff
+--- /dev/null
++++ b/lib/features/patients/presentation/pages/patient_profile_page.dart
+@@ -0,0 +1,214 @@
++import 'package:flutter/material.dart';
++
++import '../../../../core/theme/app_colors.dart';
++import '../../../../core/theme/app_spacing.dart';
++import '../../../../core/utils/input_masks.dart';
++import '../../../../core/widgets/app_primary_button.dart';
++import '../../../../core/widgets/app_secondary_button.dart';
++import '../../../../core/widgets/error_state.dart';
++import '../../domain/patient.dart';
++import '../controllers/patient_profile_controller.dart';
++
++/// Tela "Meu perfil" do paciente. Consulta GET /api/paciente/me — nunca
++/// recebe ou monta um pacienteId, a identidade vem inteiramente da sessão.
++class PatientProfilePage extends StatefulWidget {
++  const PatientProfilePage({
++    required this.controller,
++    required this.onEdit,
++    required this.onLogout,
++    super.key,
++  });
++
++  final PatientProfileController controller;
++  final void Function(Patient currentPatient) onEdit;
++
++  /// Chamado quando o paciente toca em "Sair", e também automaticamente se
++  /// o GET /me voltar 401 (sessão expirada). A limpeza de fato da sessão
++  /// (token, storage) é responsabilidade do session_controller do Jonas;
++  /// aqui só disparamos o callback.
++  final VoidCallback onLogout;
++
++  @override
++  State<PatientProfilePage> createState() => _PatientProfilePageState();
++}
++
++class _PatientProfilePageState extends State<PatientProfilePage> {
++  @override
++  void initState() {
++    super.initState();
++    widget.controller.addListener(_onControllerChanged);
++    widget.controller.load();
++  }
++
++  @override
++  void dispose() {
++    widget.controller.removeListener(_onControllerChanged);
++    super.dispose();
++  }
++
++  void _onControllerChanged() {
++    if (widget.controller.isSessionExpired) {
++      widget.onLogout();
++      return;
++    }
++    setState(() {});
++  }
++
++  @override
++  Widget build(BuildContext context) {
++    final controller = widget.controller;
++
++    return Scaffold(
++      appBar: AppBar(
++        title: const Text('Meu perfil'),
++        actions: [
++          IconButton(
++            icon: const Icon(Icons.logout),
++            tooltip: 'Sair',
++            onPressed: widget.onLogout,
++          ),
++        ],
++      ),
++      body: SafeArea(child: _buildBody(context, controller)),
++    );
++  }
++
++  Widget _buildBody(BuildContext context, PatientProfileController controller) {
++    switch (controller.status) {
++      case PatientProfileStatus.loading:
++        // TODO(Dudu): trocar por AppLoadingSkeleton quando eu confirmar a
++        // assinatura dele — não vi o conteúdo de app_loading_skeleton.dart.
++        return const Center(child: CircularProgressIndicator());
++
++      case PatientProfileStatus.error:
++        return ErrorState(
++          message: controller.errorMessage ?? 'Não foi possível carregar seu perfil.',
++          onRetry: controller.load,
++        );
++
++      case PatientProfileStatus.content:
++        final patient = controller.patient!;
++        return RefreshIndicator(
++          onRefresh: controller.load,
++          child: ListView(
++            padding: const EdgeInsets.all(AppSpacing.lg),
++            children: [
++              if (patient.isPendingCompletion) ...[
++                _PendingProfileBanner(onTap: () => widget.onEdit(patient)),
++                const SizedBox(height: AppSpacing.lg),
++              ],
++              _ProfileField(label: 'Nome completo', value: patient.nomeCompleto),
++              _ProfileField(
++                label: 'CPF',
++                value: patient.cpf.isEmpty
++                    ? '—'
++                    : InputMasks.applyMask(InputMasks.cpf, patient.cpf),
++              ),
++              _ProfileField(
++                label: 'Data de nascimento',
++                value: patient.dataNascimento == null
++                    ? '—'
++                    : _formatDate(patient.dataNascimento!),
++              ),
++              _ProfileField(
++                label: 'Telefone',
++                value: patient.telefone.isEmpty
++                    ? '—'
++                    : InputMasks.applyMask(InputMasks.telefone, patient.telefone),
++              ),
++              _ProfileField(label: 'E-mail', value: patient.email),
++              _ProfileField(
++                label: 'Endereço',
++                value: patient.endereco.isEmpty ? '—' : _formatAddress(patient.endereco),
++              ),
++              const SizedBox(height: AppSpacing.lg),
++              AppPrimaryButton(
++                label: patient.isPendingCompletion ? 'Completar perfil' : 'Editar perfil',
++                icon: Icons.edit_outlined,
++                onPressed: () => widget.onEdit(patient),
++              ),
++              const SizedBox(height: AppSpacing.sm),
++              AppSecondaryButton(label: 'Sair', icon: Icons.logout, onPressed: widget.onLogout),
++            ],
++          ),
++        );
++    }
++  }
++
++  String _formatDate(DateTime date) =>
++      '${date.day.toString().padLeft(2, '0')}/${date.month.toString().padLeft(2, '0')}/${date.year}';
++
++  String _formatAddress(PatientAddress endereco) {
++    final parts = [
++      if (endereco.rua.isNotEmpty) endereco.rua,
++      if (endereco.numero.isNotEmpty) endereco.numero,
++      if (endereco.bairro.isNotEmpty) endereco.bairro,
++      if (endereco.cidade.isNotEmpty) endereco.cidade,
++      if (endereco.estado.isNotEmpty) endereco.estado,
++    ];
++    return parts.join(', ');
++  }
++}
++
++class _ProfileField extends StatelessWidget {
++  const _ProfileField({required this.label, required this.value});
++
++  final String label;
++  final String value;
++
++  @override
++  Widget build(BuildContext context) {
++    return Padding(
++      padding: const EdgeInsets.only(bottom: AppSpacing.md),
++      child: Column(
++        crossAxisAlignment: CrossAxisAlignment.start,
++        children: [
++          Text(
++            label,
++            style: Theme.of(
++              context,
++            ).textTheme.bodyMedium?.copyWith(color: AppColors.textSecondary),
++          ),
++          const SizedBox(height: 2),
++          Text(value, style: Theme.of(context).textTheme.titleMedium),
++        ],
++      ),
++    );
++  }
++}
++
++class _PendingProfileBanner extends StatelessWidget {
++  const _PendingProfileBanner({required this.onTap});
++
++  final VoidCallback onTap;
++
++  @override
++  Widget build(BuildContext context) {
++    return InkWell(
++      onTap: onTap,
++      borderRadius: BorderRadius.circular(16),
++      child: Container(
++        padding: const EdgeInsets.all(AppSpacing.md),
++        decoration: BoxDecoration(
++          color: AppColors.primaryLight,
++          borderRadius: BorderRadius.circular(16),
++        ),
++        child: Row(
++          children: [
++            const Icon(Icons.info_outline, color: AppColors.primaryDark),
++            const SizedBox(width: AppSpacing.sm),
++            Expanded(
++              child: Text(
++                'Seu cadastro ainda não foi completado. Toque para preencher seus dados.',
++                style: Theme.of(
++                  context,
++                ).textTheme.bodyMedium?.copyWith(color: AppColors.primaryDark),
++              ),
++            ),
++            const Icon(Icons.chevron_right, color: AppColors.primaryDark),
++          ],
++        ),
++      ),
++    );
++  }
++}
+diff --git a/lib/features/patients/presentation/pages/patient_register_page.dart b/lib/features/patients/presentation/pages/patient_register_page.dart
+new file mode 100644
+index 0000000..c24b33d
+--- /dev/null
++++ b/lib/features/patients/presentation/pages/patient_register_page.dart
+@@ -0,0 +1,203 @@
++import 'package:flutter/material.dart';
++
++import '../../../../core/theme/app_spacing.dart';
++import '../../../../core/widgets/app_primary_button.dart';
++import '../../../../core/widgets/app_text_field.dart';
++import '../controllers/patient_register_controller.dart';
++
++/// Tela de cadastro de conta de Paciente.
++/// POST /api/auth/register com tipoUsuario "Paciente".
++class PatientRegisterPage extends StatefulWidget {
++  const PatientRegisterPage({
++    required this.controller,
++    required this.onRegistered,
++    this.onGoToLogin,
++    super.key,
++  });
++
++  final PatientRegisterController controller;
++
++  /// Chamado após o cadastro ter sucesso. Normalmente deve levar para a
++  /// tela de login (o Jonas ainda não logou automaticamente o usuário
++  /// recém-criado — o fluxo de sessão é dele).
++  final VoidCallback onRegistered;
++
++  final VoidCallback? onGoToLogin;
++
++  @override
++  State<PatientRegisterPage> createState() => _PatientRegisterPageState();
++}
++
++class _PatientRegisterPageState extends State<PatientRegisterPage> {
++  final _formKey = GlobalKey<FormState>();
++  final _emailController = TextEditingController();
++  final _senhaController = TextEditingController();
++  final _confirmarSenhaController = TextEditingController();
++
++  @override
++  void initState() {
++    super.initState();
++    widget.controller.addListener(_onControllerChanged);
++  }
++
++  @override
++  void dispose() {
++    widget.controller.removeListener(_onControllerChanged);
++    _emailController.dispose();
++    _senhaController.dispose();
++    _confirmarSenhaController.dispose();
++    super.dispose();
++  }
++
++  void _onControllerChanged() => setState(() {});
++
++  Future<void> _submit() async {
++    if (!(_formKey.currentState?.validate() ?? false)) return;
++
++    final success = await widget.controller.submit(
++      email: _emailController.text.trim(),
++      senha: _senhaController.text,
++    );
++
++    if (success && mounted) {
++      widget.onRegistered();
++    }
++  }
++
++  String? _validateEmail(String? value) {
++    final email = value?.trim() ?? '';
++    if (email.isEmpty) return 'Informe seu e-mail.';
++    final regex = RegExp(r'^[^@\s]+@[^@\s]+\.[^@\s]+$');
++    if (!regex.hasMatch(email)) return 'E-mail inválido.';
++    return null;
++  }
++
++  String? _validateSenha(String? value) {
++    final senha = value ?? '';
++    if (senha.isEmpty) return 'Informe uma senha.';
++    if (senha.length < 6) return 'A senha precisa ter pelo menos 6 caracteres.';
++    return null;
++  }
++
++  String? _validateConfirmarSenha(String? value) {
++    if (value != _senhaController.text) return 'As senhas não coincidem.';
++    return null;
++  }
++
++  @override
++  Widget build(BuildContext context) {
++    final controller = widget.controller;
++
++    return Scaffold(
++      appBar: AppBar(title: const Text('Criar conta')),
++      body: SafeArea(
++        child: SingleChildScrollView(
++          padding: const EdgeInsets.all(AppSpacing.lg),
++          child: Form(
++            key: _formKey,
++            child: Column(
++              crossAxisAlignment: CrossAxisAlignment.stretch,
++              children: [
++                Text(
++                  'Crie sua conta de paciente',
++                  style: Theme.of(context).textTheme.headlineMedium,
++                ),
++                const SizedBox(height: AppSpacing.xs),
++                Text(
++                  'Depois do cadastro, você completa seus dados pessoais no perfil.',
++                  style: Theme.of(context).textTheme.bodyMedium,
++                ),
++                const SizedBox(height: AppSpacing.lg),
++                AppTextField(
++                  label: 'E-mail',
++                  controller: _emailController,
++                  prefixIcon: Icons.email_outlined,
++                  keyboardType: TextInputType.emailAddress,
++                  textInputAction: TextInputAction.next,
++                  autofillHints: const [AutofillHints.email],
++                  validator: _validateEmail,
++                  enabled: !controller.isSubmitting,
++                ),
++                const SizedBox(height: AppSpacing.md),
++                AppTextField(
++                  label: 'Senha',
++                  controller: _senhaController,
++                  prefixIcon: Icons.lock_outline,
++                  obscureText: true,
++                  textInputAction: TextInputAction.next,
++                  autofillHints: const [AutofillHints.newPassword],
++                  validator: _validateSenha,
++                  enabled: !controller.isSubmitting,
++                ),
++                const SizedBox(height: AppSpacing.md),
++                AppTextField(
++                  label: 'Confirmar senha',
++                  controller: _confirmarSenhaController,
++                  prefixIcon: Icons.lock_outline,
++                  obscureText: true,
++                  textInputAction: TextInputAction.done,
++                  validator: _validateConfirmarSenha,
++                  onSubmitted: (_) => _submit(),
++                  enabled: !controller.isSubmitting,
++                ),
++                if (controller.generalError != null) ...[
++                  const SizedBox(height: AppSpacing.md),
++                  _InlineErrorBanner(
++                    message: controller.generalError!,
++                    actionLabel: controller.emailJaCadastrado ? 'Já tenho conta' : null,
++                    onAction: controller.emailJaCadastrado ? widget.onGoToLogin : null,
++                  ),
++                ],
++                const SizedBox(height: AppSpacing.lg),
++                AppPrimaryButton(
++                  label: 'Criar conta',
++                  isLoading: controller.isSubmitting,
++                  onPressed: _submit,
++                ),
++                if (widget.onGoToLogin != null) ...[
++                  const SizedBox(height: AppSpacing.md),
++                  TextButton(
++                    onPressed: controller.isSubmitting ? null : widget.onGoToLogin,
++                    child: const Text('Já tenho uma conta'),
++                  ),
++                ],
++              ],
++            ),
++          ),
++        ),
++      ),
++    );
++  }
++}
++
++class _InlineErrorBanner extends StatelessWidget {
++  const _InlineErrorBanner({required this.message, this.actionLabel, this.onAction});
++
++  final String message;
++  final String? actionLabel;
++  final VoidCallback? onAction;
++
++  @override
++  Widget build(BuildContext context) {
++    final colorScheme = Theme.of(context).colorScheme;
++    return Container(
++      padding: const EdgeInsets.all(AppSpacing.md),
++      decoration: BoxDecoration(
++        color: colorScheme.error.withValues(alpha: 0.08),
++        borderRadius: BorderRadius.circular(12),
++        border: Border.all(color: colorScheme.error.withValues(alpha: 0.3)),
++      ),
++      child: Row(
++        children: [
++          Icon(Icons.error_outline, color: colorScheme.error, size: 20),
++          const SizedBox(width: AppSpacing.sm),
++          Expanded(
++            child: Text(message, style: TextStyle(color: colorScheme.error)),
++          ),
++          if (actionLabel != null && onAction != null)
++            TextButton(onPressed: onAction, child: Text(actionLabel!)),
++        ],
++      ),
++    );
++  }
++}
+diff --git a/pubspec.yaml b/pubspec.yaml
+index ae24817..97ae4e5 100644
+--- a/pubspec.yaml
++++ b/pubspec.yaml
+@@ -9,6 +9,7 @@ environment:
+ dependencies:
+   flutter:
+     sdk: flutter
++  http: ^1.2.0
+ 
+ dev_dependencies:
+   flutter_test:
+diff --git a/test/features/patients/patient_contract_test.dart b/test/features/patients/patient_contract_test.dart
+new file mode 100644
+index 0000000..7ac3e1c
+--- /dev/null
++++ b/test/features/patients/patient_contract_test.dart
+@@ -0,0 +1,177 @@
++import 'dart:convert';
++
++import 'package:agendaifisiomobile/core/network/api_client.dart';
++import 'package:agendaifisiomobile/features/patients/data/dtos/patient_dtos.dart';
++import 'package:agendaifisiomobile/features/patients/data/patient_api.dart';
++import 'package:agendaifisiomobile/features/patients/domain/patient.dart';
++import 'package:flutter_test/flutter_test.dart';
++import 'package:http/http.dart' as http;
++import 'package:http/testing.dart';
++
++/// Backend falso que reproduz o contrato do PacienteUpdateDTO descrito no
++/// review do PR #1:
++///
++/// - PUT /api/paciente/completar-perfil lê `rua`, `numero`, `complemento`,
++///   `cep`, `bairro`, `cidade` e `estado` **na raiz** do JSON. Chaves
++///   desconhecidas (como um `endereco` aninhado) são ignoradas em silêncio e
++///   o PUT responde 200 — exatamente o comportamento que escondeu o bug.
++/// - GET /api/paciente/me devolve o endereço aninhado em `endereco`.
++///
++/// Se o backend mudar o DTO, atualize este fake junto (ou troque por um
++/// teste de integração contra a API em Docker).
++class _FakePacienteBackend {
++  Map<String, String> _stored = {};
++  Map<String, dynamic>? lastPutBody;
++
++  String _read(Map<String, dynamic> body, String key) =>
++      body[key]?.toString() ?? '';
++
++  Future<http.Response> handle(http.Request request) async {
++    if (request.method == 'PUT' &&
++        request.url.path == '/api/paciente/completar-perfil') {
++      final body = jsonDecode(request.body) as Map<String, dynamic>;
++      lastPutBody = body;
++      _stored = {
++        for (final key in const [
++          'nomeCompleto',
++          'cpf',
++          'telefone',
++          'dataNascimento',
++          'sexo',
++          'estadoCivil',
++          'rua',
++          'numero',
++          'complemento',
++          'cep',
++          'bairro',
++          'cidade',
++          'estado',
++        ])
++          key: _read(body, key),
++      };
++      return _json({'mensagem': 'Perfil atualizado com sucesso!'});
++    }
++
++    if (request.method == 'GET' && request.url.path == '/api/paciente/me') {
++      return _json({
++        'id': 'p-1',
++        'usuarioId': 'u-1',
++        'email': 'paciente@exemplo.com',
++        'nomeCompleto': _stored['nomeCompleto'] ?? 'Cadastro Pendente',
++        'cpf': _stored['cpf'] ?? '',
++        'telefone': _stored['telefone'] ?? '',
++        'dataNascimento':
++            _stored['dataNascimento'] ?? '0001-01-01T00:00:00',
++        'sexo': _stored['sexo'] ?? '',
++        'estadoCivil': _stored['estadoCivil'] ?? '',
++        'endereco': {
++          'rua': _stored['rua'] ?? '',
++          'numero': _stored['numero'] ?? '',
++          'complemento': _stored['complemento'] ?? '',
++          'cep': _stored['cep'] ?? '',
++          'bairro': _stored['bairro'] ?? '',
++          'cidade': _stored['cidade'] ?? '',
++          'estado': _stored['estado'] ?? '',
++        },
++      });
++    }
++
++    return http.Response('Not Found', 404);
++  }
++
++  http.Response _json(Object body) => http.Response(
++    jsonEncode(body),
++    200,
++    headers: {'content-type': 'application/json; charset=utf-8'},
++  );
++}
++
++PatientUpdateRequest _fullRequest() => PatientUpdateRequest(
++  nomeCompleto: 'Mariana Oliveira',
++  cpf: '12345678901',
++  telefone: '11987654321',
++  dataNascimento: DateTime(1992, 5, 18),
++  sexo: 'Feminino',
++  estadoCivil: 'Solteiro(a)',
++  endereco: const PatientAddress(
++    rua: 'Praça da Sé',
++    numero: '100',
++    complemento: 'Apto 12',
++    cep: '01001000',
++    bairro: 'Sé',
++    cidade: 'São Paulo',
++    estado: 'SP',
++  ),
++);
++
++void main() {
++  group('PatientUpdateRequest.toJson', () {
++    test('envia os campos de endereço na raiz, sem objeto aninhado', () {
++      final json = _fullRequest().toJson();
++
++      expect(json.containsKey('endereco'), isFalse);
++      expect(json['rua'], 'Praça da Sé');
++      expect(json['numero'], '100');
++      expect(json['complemento'], 'Apto 12');
++      expect(json['cep'], '01001000');
++      expect(json['bairro'], 'Sé');
++      expect(json['cidade'], 'São Paulo');
++      expect(json['estado'], 'SP');
++    });
++
++    test('formata a data de nascimento como yyyy-MM-dd', () {
++      expect(_fullRequest().toJson()['dataNascimento'], '1992-05-18');
++    });
++  });
++
++  group('contrato PUT completar-perfil → GET me', () {
++    late _FakePacienteBackend backend;
++    late PatientApi api;
++
++    setUp(() {
++      backend = _FakePacienteBackend();
++      api = PatientApi(
++        ApiClient(
++          baseUrl: 'http://backend.test',
++          httpClient: MockClient(backend.handle),
++          authHeaderProvider: () async => 'token-de-teste',
++        ),
++      );
++    });
++
++    test('persiste todos os campos, inclusive o endereço', () async {
++      await api.completarPerfil(_fullRequest());
++      final profile = (await api.getMe()).toDomain();
++
++      expect(profile.nomeCompleto, 'Mariana Oliveira');
++      expect(profile.cpf, '12345678901');
++      expect(profile.telefone, '11987654321');
++      expect(profile.dataNascimento, DateTime(1992, 5, 18));
++      expect(profile.sexo, 'Feminino');
++      expect(profile.estadoCivil, 'Solteiro(a)');
++      expect(profile.endereco.rua, 'Praça da Sé');
++      expect(profile.endereco.numero, '100');
++      expect(profile.endereco.complemento, 'Apto 12');
++      expect(profile.endereco.cep, '01001000');
++      expect(profile.endereco.bairro, 'Sé');
++      expect(profile.endereco.cidade, 'São Paulo');
++      expect(profile.endereco.estado, 'SP');
++      expect(profile.isPendingCompletion, isFalse);
++    });
++
++    test('perfil novo vem como pendente e sem data de nascimento', () async {
++      final profile = (await api.getMe()).toDomain();
++
++      expect(profile.isPendingCompletion, isTrue);
++      expect(profile.dataNascimento, isNull);
++      expect(profile.endereco.isEmpty, isTrue);
++    });
++
++    test('o corpo enviado ao backend não contém "endereco"', () async {
++      await api.completarPerfil(_fullRequest());
++
++      expect(backend.lastPutBody, isNotNull);
++      expect(backend.lastPutBody!.containsKey('endereco'), isFalse);
++    });
++  });
++}
+diff --git a/test/features/patients/patient_profile_form_page_test.dart b/test/features/patients/patient_profile_form_page_test.dart
+new file mode 100644
+index 0000000..62ace72
+--- /dev/null
++++ b/test/features/patients/patient_profile_form_page_test.dart
+@@ -0,0 +1,317 @@
++import 'dart:async';
++
++import 'package:agendaifisiomobile/core/network/api_client.dart';
++import 'package:agendaifisiomobile/core/theme/app_theme.dart';
++import 'package:agendaifisiomobile/features/patients/data/patient_api.dart';
++import 'package:agendaifisiomobile/features/patients/data/viacep_client.dart';
++import 'package:agendaifisiomobile/features/patients/domain/patient.dart';
++import 'package:agendaifisiomobile/features/patients/presentation/controllers/patient_profile_form_controller.dart';
++import 'package:agendaifisiomobile/features/patients/presentation/pages/patient_profile_form_page.dart';
++import 'package:flutter/material.dart';
++import 'package:flutter_test/flutter_test.dart';
++import 'package:http/http.dart' as http;
++import 'package:http/testing.dart';
++
++const _blankPatient = Patient(
++  nomeCompleto: 'Cadastro Pendente',
++  cpf: '',
++  telefone: '',
++  dataNascimento: null,
++  sexo: '',
++  estadoCivil: '',
++  endereco: PatientAddress(),
++  email: 'paciente@exemplo.com',
++);
++
++const _se = ViaCepAddress(
++  rua: 'Praça da Sé',
++  bairro: 'Sé',
++  cidade: 'São Paulo',
++  estado: 'SP',
++);
++
++PatientProfileFormController _controller() => PatientProfileFormController(
++  PatientApi(
++    ApiClient(
++      baseUrl: 'http://backend.test',
++      httpClient: MockClient((_) async => http.Response('{}', 200)),
++    ),
++  ),
++);
++
++Widget _page(
++  Patient patient, {
++  Future<ViaCepAddress> Function(String cep)? cepLookup,
++}) {
++  return MaterialApp(
++    theme: AppTheme.light,
++    home: PatientProfileFormPage(
++      controller: _controller(),
++      currentPatient: patient,
++      onSaved: () {},
++      cepLookup: cepLookup,
++    ),
++  );
++}
++
++/// Tela alta o bastante para o formulário inteiro caber sem rolagem.
++void _useTallScreen(WidgetTester tester) {
++  tester.view.physicalSize = const Size(800, 3000);
++  tester.view.devicePixelRatio = 1;
++  addTearDown(tester.view.resetPhysicalSize);
++  addTearDown(tester.view.resetDevicePixelRatio);
++}
++
++Finder _field(String label) => find.widgetWithText(TextFormField, label);
++
++String _textOf(WidgetTester tester, String label) =>
++    tester.widget<TextFormField>(_field(label)).controller!.text;
++
++void main() {
++  group('dropdowns de sexo e estado civil', () {
++    testWidgets('valor da API fora da lista de opções não quebra a tela', (
++      tester,
++    ) async {
++      _useTallScreen(tester);
++      const patient = Patient(
++        nomeCompleto: 'João Teste',
++        cpf: '12345678901',
++        telefone: '11987654321',
++        dataNascimento: null,
++        sexo: 'feminino', // minúscula: não bate com 'Feminino'
++        estadoCivil: 'Casado', // sem o "(a)": não bate com 'Casado(a)'
++        endereco: PatientAddress(),
++        email: 'joao@exemplo.com',
++      );
++
++      await tester.pumpWidget(_page(patient));
++
++      expect(tester.takeException(), isNull);
++      expect(find.text('feminino'), findsOneWidget);
++      expect(find.text('Casado'), findsOneWidget);
++    });
++
++    testWidgets('valor que está nas opções continua funcionando', (
++      tester,
++    ) async {
++      _useTallScreen(tester);
++      const patient = Patient(
++        nomeCompleto: 'Mariana',
++        cpf: '',
++        telefone: '',
++        dataNascimento: null,
++        sexo: 'Feminino',
++        estadoCivil: 'Solteiro(a)',
++        endereco: PatientAddress(),
++        email: 'm@exemplo.com',
++      );
++
++      await tester.pumpWidget(_page(patient));
++
++      expect(tester.takeException(), isNull);
++      expect(find.text('Feminino'), findsOneWidget);
++      expect(find.text('Solteiro(a)'), findsOneWidget);
++    });
++  });
++
++  group('preenchimento de endereço pelo CEP (ViaCEP)', () {
++    testWidgets('CEP completo preenche rua, bairro, cidade e estado', (
++      tester,
++    ) async {
++      _useTallScreen(tester);
++      final requestedCeps = <String>[];
++      await tester.pumpWidget(
++        _page(
++          _blankPatient,
++          cepLookup: (cep) async {
++            requestedCeps.add(cep);
++            return _se;
++          },
++        ),
++      );
++
++      await tester.enterText(_field('CEP'), '01001000');
++      await tester.pumpAndSettle();
++
++      expect(requestedCeps, ['01001000']);
++      expect(_textOf(tester, 'CEP'), '01001-000');
++      expect(_textOf(tester, 'Rua'), 'Praça da Sé');
++      expect(_textOf(tester, 'Bairro'), 'Sé');
++      expect(_textOf(tester, 'Cidade'), 'São Paulo');
++      expect(_textOf(tester, 'Estado'), 'SP');
++    });
++
++    testWidgets('não mexe em número e complemento', (tester) async {
++      _useTallScreen(tester);
++      await tester.pumpWidget(_page(_blankPatient, cepLookup: (_) async => _se));
++
++      await tester.enterText(_field('Número'), '100');
++      await tester.enterText(_field('Complemento'), 'Apto 12');
++      await tester.enterText(_field('CEP'), '01001000');
++      await tester.pumpAndSettle();
++
++      expect(_textOf(tester, 'Número'), '100');
++      expect(_textOf(tester, 'Complemento'), 'Apto 12');
++    });
++
++    testWidgets('os campos continuam editáveis depois do preenchimento', (
++      tester,
++    ) async {
++      _useTallScreen(tester);
++      await tester.pumpWidget(_page(_blankPatient, cepLookup: (_) async => _se));
++
++      await tester.enterText(_field('CEP'), '01001000');
++      await tester.pumpAndSettle();
++      await tester.enterText(_field('Rua'), 'Rua Corrigida à mão');
++      await tester.pump();
++
++      expect(_textOf(tester, 'Rua'), 'Rua Corrigida à mão');
++    });
++
++    testWidgets('resposta sem rua mantém a rua já digitada', (tester) async {
++      _useTallScreen(tester);
++      await tester.pumpWidget(
++        _page(
++          _blankPatient,
++          cepLookup: (_) async => const ViaCepAddress(
++            rua: '',
++            bairro: '',
++            cidade: 'Atibaia',
++            estado: 'SP',
++          ),
++        ),
++      );
++
++      await tester.enterText(_field('Rua'), 'Rua que eu já digitei');
++      await tester.enterText(_field('CEP'), '12940000');
++      await tester.pumpAndSettle();
++
++      expect(_textOf(tester, 'Rua'), 'Rua que eu já digitei');
++      expect(_textOf(tester, 'Cidade'), 'Atibaia');
++    });
++
++    testWidgets('mostra indicador de carregamento durante a consulta', (
++      tester,
++    ) async {
++      _useTallScreen(tester);
++      final pending = Completer<ViaCepAddress>();
++      await tester.pumpWidget(
++        _page(_blankPatient, cepLookup: (_) => pending.future),
++      );
++
++      await tester.enterText(_field('CEP'), '01001000');
++      await tester.pump();
++      expect(find.byType(CircularProgressIndicator), findsOneWidget);
++
++      pending.complete(_se);
++      await tester.pumpAndSettle();
++      expect(find.byType(CircularProgressIndicator), findsNothing);
++      expect(_textOf(tester, 'Rua'), 'Praça da Sé');
++    });
++
++    testWidgets('CEP inexistente avisa e permite preencher à mão', (
++      tester,
++    ) async {
++      _useTallScreen(tester);
++      await tester.pumpWidget(
++        _page(
++          _blankPatient,
++          cepLookup: (_) async =>
++              throw const CepLookupException(CepLookupFailure.notFound),
++        ),
++      );
++
++      await tester.enterText(_field('CEP'), '99999999');
++      await tester.pumpAndSettle();
++
++      expect(find.textContaining('CEP não encontrado'), findsOneWidget);
++      await tester.enterText(_field('Rua'), 'Rua Manual');
++      await tester.pump();
++      expect(_textOf(tester, 'Rua'), 'Rua Manual');
++    });
++
++    testWidgets('timeout avisa e permite preencher à mão', (tester) async {
++      _useTallScreen(tester);
++      await tester.pumpWidget(
++        _page(
++          _blankPatient,
++          cepLookup: (_) async =>
++              throw const CepLookupException(CepLookupFailure.timeout),
++        ),
++      );
++
++      await tester.enterText(_field('CEP'), '01001000');
++      await tester.pumpAndSettle();
++
++      expect(find.textContaining('demorou demais'), findsOneWidget);
++      expect(find.byType(CircularProgressIndicator), findsNothing);
++    });
++
++    testWidgets('falha de rede avisa sem travar o formulário', (tester) async {
++      _useTallScreen(tester);
++      await tester.pumpWidget(
++        _page(
++          _blankPatient,
++          cepLookup: (_) async =>
++              throw const CepLookupException(CepLookupFailure.network),
++        ),
++      );
++
++      await tester.enterText(_field('CEP'), '01001000');
++      await tester.pumpAndSettle();
++
++      expect(find.textContaining('Não foi possível consultar o CEP'), findsOneWidget);
++      expect(tester.takeException(), isNull);
++    });
++
++    testWidgets('resposta de consulta antiga é descartada', (tester) async {
++      _useTallScreen(tester);
++      final first = Completer<ViaCepAddress>();
++      await tester.pumpWidget(_page(_blankPatient, cepLookup: (_) => first.future));
++
++      await tester.enterText(_field('CEP'), '01001000');
++      await tester.pump();
++      // Usuário apaga um dígito antes da resposta chegar.
++      await tester.enterText(_field('CEP'), '0100100');
++      await tester.pump();
++
++      first.complete(_se);
++      await tester.pumpAndSettle();
++
++      expect(_textOf(tester, 'Rua'), isEmpty);
++      expect(find.byType(CircularProgressIndicator), findsNothing);
++    });
++
++    testWidgets('CEP já salvo não dispara consulta ao abrir a tela', (
++      tester,
++    ) async {
++      _useTallScreen(tester);
++      var calls = 0;
++      const patient = Patient(
++        nomeCompleto: 'Mariana',
++        cpf: '',
++        telefone: '',
++        dataNascimento: null,
++        sexo: '',
++        estadoCivil: '',
++        endereco: PatientAddress(cep: '01001000', rua: 'Rua Salva'),
++        email: 'm@exemplo.com',
++      );
++
++      await tester.pumpWidget(
++        _page(
++          patient,
++          cepLookup: (_) async {
++            calls++;
++            return _se;
++          },
++        ),
++      );
++      await tester.pumpAndSettle();
++
++      expect(calls, 0);
++      expect(_textOf(tester, 'CEP'), '01001-000');
++      expect(_textOf(tester, 'Rua'), 'Rua Salva');
++    });
++  });
++}
+diff --git a/test/features/patients/viacep_client_test.dart b/test/features/patients/viacep_client_test.dart
+new file mode 100644
+index 0000000..fb5f93f
+--- /dev/null
++++ b/test/features/patients/viacep_client_test.dart
+@@ -0,0 +1,140 @@
++import 'dart:async';
++import 'dart:convert';
++
++import 'package:agendaifisiomobile/features/patients/data/viacep_client.dart';
++import 'package:flutter_test/flutter_test.dart';
++import 'package:http/http.dart' as http;
++import 'package:http/testing.dart';
++
++// Resposta real do ViaCEP para 01001-000.
++const _sePayload = {
++  'cep': '01001-000',
++  'logradouro': 'Praça da Sé',
++  'complemento': 'lado ímpar',
++  'bairro': 'Sé',
++  'localidade': 'São Paulo',
++  'uf': 'SP',
++  'ibge': '3550308',
++};
++
++http.Response _jsonResponse(Object body, [int status = 200]) => http.Response.bytes(
++  utf8.encode(jsonEncode(body)),
++  status,
++  headers: {'content-type': 'application/json; charset=utf-8'},
++);
++
++Matcher _failsWith(CepLookupFailure failure) => throwsA(
++  isA<CepLookupException>().having((e) => e.failure, 'failure', failure),
++);
++
++void main() {
++  test('converte a resposta do ViaCEP e consulta a URL correta', () async {
++    late Uri requested;
++    final client = ViaCepClient(
++      httpClient: MockClient((request) async {
++        requested = request.url;
++        return _jsonResponse(_sePayload);
++      }),
++    );
++
++    final address = await client.lookup('01001-000');
++
++    expect(requested.toString(), 'https://viacep.com.br/ws/01001000/json/');
++    expect(address.rua, 'Praça da Sé');
++    expect(address.bairro, 'Sé');
++    expect(address.cidade, 'São Paulo');
++    expect(address.estado, 'SP');
++  });
++
++  test('campos ausentes viram string vazia (CEP geral de cidade)', () async {
++    final client = ViaCepClient(
++      httpClient: MockClient(
++        (_) async => _jsonResponse({
++          'cep': '12940-000',
++          'logradouro': '',
++          'bairro': '',
++          'localidade': 'Atibaia',
++          'uf': 'SP',
++        }),
++      ),
++    );
++
++    final address = await client.lookup('12940000');
++
++    expect(address.rua, isEmpty);
++    expect(address.bairro, isEmpty);
++    expect(address.cidade, 'Atibaia');
++    expect(address.estado, 'SP');
++  });
++
++  test('CEP com menos de 8 dígitos falha sem chamar a rede', () async {
++    var calls = 0;
++    final client = ViaCepClient(
++      httpClient: MockClient((_) async {
++        calls++;
++        return _jsonResponse(_sePayload);
++      }),
++    );
++
++    await expectLater(client.lookup('0100100'), _failsWith(CepLookupFailure.invalid));
++    expect(calls, 0);
++  });
++
++  test('{"erro": true} significa CEP inexistente', () async {
++    final client = ViaCepClient(
++      httpClient: MockClient((_) async => _jsonResponse({'erro': true})),
++    );
++
++    await expectLater(client.lookup('99999999'), _failsWith(CepLookupFailure.notFound));
++  });
++
++  test('{"erro": "true"} (formato antigo) também é CEP inexistente', () async {
++    final client = ViaCepClient(
++      httpClient: MockClient((_) async => _jsonResponse({'erro': 'true'})),
++    );
++
++    await expectLater(client.lookup('99999999'), _failsWith(CepLookupFailure.notFound));
++  });
++
++  test('HTTP 400 vira CEP inválido', () async {
++    final client = ViaCepClient(
++      httpClient: MockClient((_) async => http.Response('Bad Request', 400)),
++    );
++
++    await expectLater(client.lookup('01001000'), _failsWith(CepLookupFailure.invalid));
++  });
++
++  test('HTTP 500 vira falha de rede', () async {
++    final client = ViaCepClient(
++      httpClient: MockClient((_) async => http.Response('erro', 500)),
++    );
++
++    await expectLater(client.lookup('01001000'), _failsWith(CepLookupFailure.network));
++  });
++
++  test('corpo que não é JSON vira falha de rede', () async {
++    final client = ViaCepClient(
++      httpClient: MockClient((_) async => http.Response('<html>oops</html>', 200)),
++    );
++
++    await expectLater(client.lookup('01001000'), _failsWith(CepLookupFailure.network));
++  });
++
++  test('exceção do cliente HTTP vira falha de rede', () async {
++    final client = ViaCepClient(
++      httpClient: MockClient((_) async => throw http.ClientException('sem conexão')),
++    );
++
++    await expectLater(client.lookup('01001000'), _failsWith(CepLookupFailure.network));
++  });
++
++  test('sem resposta dentro do limite vira timeout', () async {
++    final never = Completer<http.Response>();
++    final client = ViaCepClient(
++      httpClient: MockClient((_) => never.future),
++      timeout: const Duration(milliseconds: 20),
++    );
++
++    await expectLater(client.lookup('01001000'), _failsWith(CepLookupFailure.timeout));
++  });
++}
