@@ -77,9 +77,11 @@ de criação. Os dados não são enviados ao banco.
 ## Perfil do profissional
 
 `lib/features/professional_profile/` contém cadastro de conta profissional,
-resumo do próprio perfil e formulário de completar/editar. O cadastro usa
-`POST /api/auth/register` sem Bearer e, após sucesso, a navegação deve levar ao
-login compartilhado. `ProfessionalProfilePage` recebe um
+resumo do próprio perfil e formulário de completar/editar. A opção de cadastro
+profissional está disponível a partir do login. O cadastro usa
+`POST /api/auth/register` sem Bearer e, após sucesso, retorna ao login
+compartilhado. Após autenticação como Profissional, o app abre Meu perfil.
+`ProfessionalProfilePage` recebe um
 `ProfessionalProfileController` e um callback de logout da sessão. O controller
 consulta `/api/auth/me`, confirma o papel `Profissional` e usa o `perfilId` da
 resposta para buscar os dados públicos em `/api/profissional/{id}`. O formulário
@@ -91,8 +93,7 @@ nascimento. Esses campos são obrigatórios no PUT, então precisam ser informad
 novamente ao abrir o formulário após reiniciar a sessão; somente um envio
 confirmado os mantém em memória durante a sessão atual. A troca de especialidade
 é acionada por `onChangeSpecialty`, para usar a tela e o seletor do módulo de
-especialidades quando estiverem integrados. O fluxo de login compartilhado ainda
-deve montar essas páginas na navegação autenticada.
+especialidades quando estiverem integrados.
 
 O tema usa Inter incluída nos assets, corpo de 16 px, texto mínimo de 12 px,
 controles de pelo menos 48 px, raio de 12 px nos controles e 16 px nos modais.
