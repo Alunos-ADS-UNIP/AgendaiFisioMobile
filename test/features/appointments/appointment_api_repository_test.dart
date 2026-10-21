@@ -7,6 +7,7 @@ import 'package:http/testing.dart';
 import 'package:agendaifisiomobile/core/models/appointment_status.dart';
 import 'package:agendaifisiomobile/features/appointments/data/appointment_api_repository.dart';
 import 'package:agendaifisiomobile/features/appointments/domain/appointment_failure.dart';
+import 'package:agendaifisiomobile/features/appointments/domain/appointment_filters.dart';
 
 void main() {
   const token = 'test-token';
@@ -114,6 +115,67 @@ void main() {
     expect(items.single.status, AppointmentStatus.confirmed);
     expect(items.single.dateTime.isUtc, isFalse);
   });
+
+  test(
+    'filtro de dia é aplicado localmente sem converter o dia para UTC',
+    () async {
+      late http.Request captured;
+      final repository = AppointmentApiRepository(
+        baseUri: Uri.parse('http://localhost:5048'),
+        tokenProvider: () async => token,
+        client: MockClient((request) async {
+          captured = request;
+          return http.Response(jsonEncode([_appointmentJson]), 200);
+        }),
+      );
+
+      final localDate = DateTime.parse(_appointmentJson['dataHora'] as String)
+          .toLocal();
+      final items = await repository.fetchAppointments(
+        filters: AppointmentFilters(day: localDate),
+      );
+
+      expect(captured.url.queryParameters, isNot(contains('data')));
+      expect(items, hasLength(1));
+    },
+  );
+
+  test(
+    'listagem de profissionais percorre todas as páginas do backend',
+    () async {
+      final pages = <String>[];
+      final repository = AppointmentApiRepository(
+        baseUri: Uri.parse('http://localhost:5048'),
+        tokenProvider: () async => token,
+        client: MockClient((request) async {
+          final page = request.url.queryParameters['pagina']!;
+          pages.add(page);
+          return http.Response(
+            jsonEncode({
+              'itens': [
+                {
+                  'id': 'professional-$page',
+                  'nomeCompleto': 'Profissional $page',
+                  'ativo': true,
+                },
+              ],
+              'paginaAtual': int.parse(page),
+              'totalPaginas': 2,
+            }),
+            200,
+          );
+        }),
+      );
+
+      final professionals = await repository.fetchProfessionals(pageSize: 1);
+
+      expect(pages, ['1', '2']);
+      expect(professionals.map((item) => item.id), [
+        'professional-1',
+        'professional-2',
+      ]);
+    },
+  );
 
   test('conflito 409 fica tipado para a tela preservar a seleção', () async {
     final repository = AppointmentApiRepository(

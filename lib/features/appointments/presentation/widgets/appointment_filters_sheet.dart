@@ -25,6 +25,13 @@ class AppointmentFiltersSheet extends StatefulWidget {
 }
 
 class _AppointmentFiltersSheetState extends State<AppointmentFiltersSheet> {
+  static const _supportedStatuses = [
+    AppointmentStatus.scheduled,
+    AppointmentStatus.confirmed,
+    AppointmentStatus.completed,
+    AppointmentStatus.cancelled,
+  ];
+
   DateTime? _day;
   String? _professionalId;
   AppointmentStatus? _status;
@@ -139,7 +146,7 @@ class _AppointmentFiltersSheetState extends State<AppointmentFiltersSheet> {
                     value: null,
                     child: Text('Todos'),
                   ),
-                  ...AppointmentStatus.values.map(
+                  ..._supportedStatuses.map(
                     (status) => DropdownMenuItem<AppointmentStatus?>(
                       value: status,
                       child: Text(_statusLabel(status)),

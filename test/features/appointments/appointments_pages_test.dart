@@ -77,6 +77,43 @@ void main() {
       findsOneWidget,
     );
   });
+
+  testWidgets('home ignora consulta futura cancelada', (tester) async {
+    final cancelled = Appointment(
+      id: 'cancelled',
+      professionalId: 'professional-cancelled',
+      professionalName: 'Profissional cancelado',
+      dateTime: DateTime.now().add(const Duration(days: 1)),
+      status: AppointmentStatus.cancelled,
+    );
+    await tester.pumpWidget(
+      MaterialApp(
+        home: PatientHomePage(
+          repository: _FakeRepository([cancelled, nextAppointment]),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('Dra. Marina Lopes'), findsOneWidget);
+    expect(find.text('Profissional cancelado'), findsNothing);
+  });
+
+  testWidgets('histórico ausente não reutiliza a agenda futura', (
+    tester,
+  ) async {
+    await tester.pumpWidget(
+      MaterialApp(
+        home: PatientHomePage(repository: _FakeRepository([nextAppointment])),
+      ),
+    );
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Histórico de consultas'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Histórico ainda não conectado'), findsOneWidget);
+    expect(find.text('Dra. Marina Lopes'), findsNothing);
+  });
 }
 
 class _FakeRepository implements AppointmentRepository {

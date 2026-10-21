@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../../../core/theme/app_spacing.dart';
+import '../../../../core/models/appointment_status.dart';
 import '../../../../core/widgets/appointment_card.dart';
 import '../../../../core/widgets/app_primary_button.dart';
 import '../../../../core/widgets/app_secondary_button.dart';
@@ -49,6 +50,11 @@ class _PatientHomePageState extends State<PatientHomePage> {
           final futureAppointments =
               (snapshot.data ?? const <Appointment>[])
                   .where((item) => item.dateTime.isAfter(DateTime.now()))
+                  .where(
+                    (item) =>
+                        item.status == AppointmentStatus.scheduled ||
+                        item.status == AppointmentStatus.confirmed,
+                  )
                   .toList()
                 ..sort((a, b) => a.dateTime.compareTo(b.dateTime));
           return ListView(
@@ -151,9 +157,13 @@ class _PatientHomePageState extends State<PatientHomePage> {
     if (historyRepository == null) {
       await Navigator.of(context).push<void>(
         MaterialPageRoute(
-          builder: (_) => AppointmentsPage(
-            repository: widget.repository,
-            title: 'Histórico de consultas',
+          builder: (_) => Scaffold(
+            appBar: AppBar(title: const Text('Histórico de consultas')),
+            body: const EmptyState(
+              title: 'Histórico ainda não conectado',
+              message: 'A integração do histórico precisa estar disponível para exibir consultas anteriores.',
+              icon: Icons.history,
+            ),
           ),
         ),
       );

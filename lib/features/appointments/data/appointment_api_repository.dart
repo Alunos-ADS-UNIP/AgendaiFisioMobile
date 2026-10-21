@@ -99,13 +99,9 @@ class AppointmentApiRepository implements AppointmentRepository {
     AppointmentFilters filters = const AppointmentFilters(),
   }) async {
     final query = <String, String>{};
-    if (filters.day case final day?) {
-      query['data'] = DateTime(
-        day.year,
-        day.month,
-        day.day,
-      ).toUtc().toIso8601String();
-    }
+    // O backend interpreta `data` como um dia UTC. Enviar a meia-noite local
+    // excluiria consultas no fim do dia em fusos negativos, então o filtro de
+    // dia é aplicado abaixo, já com as datas convertidas para o horário local.
     if (filters.professionalId case final id?) query['profissionalId'] = id;
     if (filters.status case final status?) {
       query['status'] = _statusToApi(status);
@@ -121,7 +117,8 @@ class AppointmentApiRepository implements AppointmentRepository {
     try {
       final rows = _readList(jsonDecode(response.body));
       final appointments = rows.map(_appointmentFromJson).toList();
-      return appointments..sort((a, b) => a.dateTime.compareTo(b.dateTime));
+      final filtered = filters.apply(appointments);
+      return filtered..sort((a, b) => a.dateTime.compareTo(b.dateTime));
     } catch (_) {
       throw const AppointmentException(AppointmentFailure.unexpected);
     }
@@ -205,27 +202,50 @@ class AppointmentApiRepository implements AppointmentRepository {
     int page = 1,
     int pageSize = 20,
   }) async {
-    final query = <String, String>{
-      'pagina': '$page',
-      'tamanhoPagina': '$pageSize',
-      'especialidadeId': ?specialtyId,
-      if (active != null) 'ativo': '$active',
-    };
-    final response = await _send(
-      'GET',
-      '/api/profissional',
-      query: query,
-      authenticated: true,
-    );
-    if (response.statusCode != 200) _throwForStatus(response.statusCode);
+    var currentPage = page < 1 ? 1 : page;
+    final effectivePageSize = pageSize.clamp(1, 50);
+    final professionals = <Professional>[];
     try {
-      return _readList(jsonDecode(response.body))
-          .map((row) {
-            final professional = _professionalFromJson(row);
-            _professionals[professional.id] = professional;
-            return professional;
-          })
-          .toList(growable: false);
+      while (true) {
+        final query = <String, String>{
+          'pagina': '$currentPage',
+          'tamanhoPagina': '$effectivePageSize',
+          'especialidadeId': ?specialtyId,
+          if (active != null) 'ativo': '$active',
+        };
+        final response = await _send(
+          'GET',
+          '/api/profissional',
+          query: query,
+          authenticated: true,
+        );
+        if (response.statusCode != 200) _throwForStatus(response.statusCode);
+
+        final decoded = jsonDecode(response.body);
+        final rows = _readList(decoded);
+        for (final row in rows) {
+          final professional = _professionalFromJson(row);
+          _professionals[professional.id] = professional;
+          professionals.add(professional);
+        }
+
+        final totalPages = decoded is Map
+            ? int.tryParse(
+                (_value(Map<String, dynamic>.from(decoded), const [
+                          'totalPaginas',
+                          'totalPages',
+                        ]) ??
+                        '')
+                    .toString(),
+              )
+            : null;
+        final reachedLastPage = totalPages != null
+            ? currentPage >= totalPages
+            : rows.length < effectivePageSize;
+        if (reachedLastPage) break;
+        currentPage++;
+      }
+      return professionals;
     } on AppointmentException {
       rethrow;
     } catch (_) {
