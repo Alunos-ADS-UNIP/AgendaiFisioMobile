@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../../../../core/theme/app_spacing.dart';
 import '../../../../core/widgets/app_primary_button.dart';
+import '../../../../core/widgets/app_secondary_button.dart';
 import '../../../../core/widgets/app_text_field.dart';
 import '../../../../core/widgets/error_state.dart';
 import '../../../../core/widgets/professional_card.dart';
@@ -217,7 +218,7 @@ class _NewAppointmentPageState extends State<NewAppointmentPage> {
         status: appointment.status,
         observations: appointment.observations,
       );
-      await Navigator.of(context).pushReplacement<bool, void>(
+      await Navigator.of(context).push<bool>(
         MaterialPageRoute(
           builder: (_) => AppointmentCreatedPage(
             repository: widget.repository,
@@ -225,6 +226,7 @@ class _NewAppointmentPageState extends State<NewAppointmentPage> {
           ),
         ),
       );
+      if (mounted) Navigator.pop(context, true);
     } on AppointmentException catch (error) {
       if (mounted) setState(() => _error = error.userMessage);
     } catch (_) {
@@ -329,10 +331,10 @@ class _NewAppointmentPageState extends State<NewAppointmentPage> {
         style: Theme.of(context).textTheme.titleLarge,
       ),
       const SizedBox(height: AppSpacing.sm),
-      OutlinedButton.icon(
+      AppSecondaryButton(
         onPressed: _chooseSpecialty,
-        icon: const Icon(Icons.spa_outlined),
-        label: Text(_specialty?.name ?? 'Selecionar especialidade'),
+        icon: Icons.spa_outlined,
+        label: _specialty?.name ?? 'Selecionar especialidade',
       ),
       if (_specialties.isEmpty)
         const Padding(
@@ -359,32 +361,18 @@ class _NewAppointmentPageState extends State<NewAppointmentPage> {
         ..._professionals.map(
           (item) => Padding(
             padding: const EdgeInsets.only(bottom: AppSpacing.sm),
-            child: Semantics(
-              selected: _professional?.id == item.id,
-              child: Material(
-                color: _professional?.id == item.id
-                    ? Theme.of(context).colorScheme.primaryContainer
-                    : null,
-                borderRadius: BorderRadius.circular(16),
-                child: InkWell(
-                  borderRadius: BorderRadius.circular(16),
-                  onTap: () => setState(() {
-                    _professional = item;
-                    _error = null;
-                  }),
-                  child: Padding(
-                    padding: const EdgeInsets.all(4),
-                    child: ProfessionalCard(
-                      name: item.name,
-                      specialty: item.specialtyName.isEmpty
-                          ? _specialty!.name
-                          : item.specialtyName,
-                      crefito: item.crefito,
-                      isActive: item.isActive,
-                    ),
-                  ),
-                ),
-              ),
+            child: ProfessionalCard(
+              name: item.name,
+              isSelected: _professional?.id == item.id,
+              specialty: item.specialtyName.isEmpty
+                  ? (_specialty?.name ?? '')
+                  : item.specialtyName,
+              crefito: item.crefito,
+              isActive: item.isActive,
+              onTap: () => setState(() {
+                _professional = item;
+                _error = null;
+              }),
             ),
           ),
         ),
@@ -405,22 +393,18 @@ class _NewAppointmentPageState extends State<NewAppointmentPage> {
         title: Text(_professional?.name ?? 'Profissional'),
         subtitle: Text(_professional?.crefito ?? ''),
       ),
-      OutlinedButton.icon(
+      AppSecondaryButton(
         onPressed: _selectDay,
-        icon: const Icon(Icons.calendar_today_outlined),
-        label: Text(
-          _day == null
-              ? 'Selecionar data'
-              : MaterialLocalizations.of(context).formatMediumDate(_day!),
-        ),
+        icon: Icons.calendar_today_outlined,
+        label: _day == null
+            ? 'Selecionar data'
+            : MaterialLocalizations.of(context).formatMediumDate(_day!),
       ),
       const SizedBox(height: AppSpacing.xs),
-      OutlinedButton.icon(
+      AppSecondaryButton(
         onPressed: _selectTime,
-        icon: const Icon(Icons.schedule_outlined),
-        label: Text(
-          _time == null ? 'Selecionar horário' : _time!.format(context),
-        ),
+        icon: Icons.schedule_outlined,
+        label: _time == null ? 'Selecionar horário' : _time!.format(context),
       ),
       const SizedBox(height: AppSpacing.sm),
       AppTextField(

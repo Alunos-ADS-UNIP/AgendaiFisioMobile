@@ -1,6 +1,9 @@
 import 'package:flutter/material.dart';
 
 import '../../../../core/theme/app_spacing.dart';
+import '../../../../core/widgets/app_search_field.dart';
+import '../../../../core/widgets/empty_state.dart';
+import '../../../../core/widgets/error_state.dart';
 import '../../domain/appointment_repository.dart';
 import '../../domain/specialty.dart';
 
@@ -16,9 +19,16 @@ class AppointmentSpecialtyPickerSheet extends StatefulWidget {
 
 class _AppointmentSpecialtyPickerSheetState
     extends State<AppointmentSpecialtyPickerSheet> {
-  late final Future<List<Specialty>> _specialties = widget.repository
+  final _searchController = TextEditingController();
+  late Future<List<Specialty>> _specialties = widget.repository
       .fetchSpecialties();
   String _query = '';
+
+  @override
+  void dispose() {
+    _searchController.dispose();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) => SafeArea(
@@ -34,13 +44,11 @@ class _AppointmentSpecialtyPickerSheetState
               style: Theme.of(context).textTheme.titleLarge,
             ),
             const SizedBox(height: AppSpacing.sm),
-            TextField(
+            AppSearchField(
+              controller: _searchController,
+              hint: 'Pesquisar especialidade',
               onChanged: (value) =>
                   setState(() => _query = value.trim().toLowerCase()),
-              decoration: const InputDecoration(
-                prefixIcon: Icon(Icons.search),
-                labelText: 'Pesquisar',
-              ),
             ),
             const SizedBox(height: AppSpacing.sm),
             Expanded(
@@ -51,16 +59,25 @@ class _AppointmentSpecialtyPickerSheetState
                     return const Center(child: CircularProgressIndicator());
                   }
                   if (snapshot.hasError) {
-                    return Center(
-                      child: Text('Não foi possível carregar especialidades.'),
+                    return SingleChildScrollView(
+                      child: ErrorState(
+                        message: 'Não foi possível carregar especialidades.',
+                        onRetry: () => setState(
+                          () => _specialties = widget.repository
+                              .fetchSpecialties(),
+                        ),
+                      ),
                     );
                   }
                   final filtered = (snapshot.data ?? const <Specialty>[])
                       .where((item) => item.name.toLowerCase().contains(_query))
                       .toList();
                   if (filtered.isEmpty) {
-                    return const Center(
-                      child: Text('Nenhuma especialidade encontrada.'),
+                    return const SingleChildScrollView(
+                      child: EmptyState(
+                        title: 'Nenhuma especialidade encontrada',
+                        message: 'Tente outro termo de busca.',
+                      ),
                     );
                   }
                   return ListView.builder(

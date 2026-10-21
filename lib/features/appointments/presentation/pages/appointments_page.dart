@@ -180,7 +180,7 @@ class _AppointmentsPageState extends State<AppointmentsPage> {
   }
 
   String _dateLabel(BuildContext context, DateTime date) =>
-      MaterialLocalizations.of(context).formatShortDate(date).toUpperCase();
+      MaterialLocalizations.of(context).formatCompactDate(date).toUpperCase();
 
   String _timeLabel(BuildContext context, DateTime date) =>
       MaterialLocalizations.of(context)

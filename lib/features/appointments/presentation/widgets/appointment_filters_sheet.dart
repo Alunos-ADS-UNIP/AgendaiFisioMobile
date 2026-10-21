@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 
 import '../../../../core/models/appointment_status.dart';
 import '../../../../core/theme/app_spacing.dart';
+import '../../../../core/widgets/app_primary_button.dart';
+import '../../../../core/widgets/app_secondary_button.dart';
 import '../../domain/appointment_filters.dart';
 import '../../domain/appointment_failure.dart';
 import '../../domain/appointment_repository.dart';
@@ -49,7 +51,10 @@ class _AppointmentFiltersSheetState extends State<AppointmentFiltersSheet> {
       if (mounted) setState(() => _professionalsError = error.userMessage);
     } catch (_) {
       if (mounted) {
-        setState(() => _professionalsError = 'Não foi possível carregar os profissionais.');
+        setState(
+          () => _professionalsError =
+              'Não foi possível carregar os profissionais.',
+        );
       }
     } finally {
       if (mounted) setState(() => _loading = false);
@@ -76,15 +81,12 @@ class _AppointmentFiltersSheetState extends State<AppointmentFiltersSheet> {
                 style: Theme.of(context).textTheme.titleLarge,
               ),
               const SizedBox(height: AppSpacing.md),
-              OutlinedButton.icon(
+              AppSecondaryButton(
                 onPressed: _pickDay,
-                icon: const Icon(Icons.calendar_today_outlined),
-                label: Text(
-                  _day == null
-                      ? 'Qualquer data'
-                      : MaterialLocalizations.of(context)
-                            .formatMediumDate(_day!),
-                ),
+                icon: Icons.calendar_today_outlined,
+                label: _day == null
+                    ? 'Qualquer data'
+                    : MaterialLocalizations.of(context).formatMediumDate(_day!),
               ),
               const SizedBox(height: AppSpacing.sm),
               DropdownButtonFormField<String?>(
@@ -96,6 +98,12 @@ class _AppointmentFiltersSheetState extends State<AppointmentFiltersSheet> {
                     value: null,
                     child: Text('Todos'),
                   ),
+                  if (_professionalId != null &&
+                      !_professionals.any((item) => item.id == _professionalId))
+                    DropdownMenuItem<String?>(
+                      value: _professionalId,
+                      child: const Text('Profissional selecionado'),
+                    ),
                   ..._professionals.map(
                     (professional) => DropdownMenuItem<String?>(
                       value: professional.id,
@@ -116,7 +124,9 @@ class _AppointmentFiltersSheetState extends State<AppointmentFiltersSheet> {
                   padding: const EdgeInsets.only(top: AppSpacing.xs),
                   child: Text(
                     _professionalsError!,
-                    style: TextStyle(color: Theme.of(context).colorScheme.error),
+                    style: TextStyle(
+                      color: Theme.of(context).colorScheme.error,
+                    ),
                   ),
                 ),
               const SizedBox(height: AppSpacing.sm),
@@ -139,7 +149,8 @@ class _AppointmentFiltersSheetState extends State<AppointmentFiltersSheet> {
                 onChanged: (value) => setState(() => _status = value),
               ),
               const SizedBox(height: AppSpacing.md),
-              FilledButton(
+              AppPrimaryButton(
+                label: 'Aplicar filtros',
                 onPressed: () => Navigator.pop(
                   context,
                   AppointmentFilters(
@@ -148,12 +159,12 @@ class _AppointmentFiltersSheetState extends State<AppointmentFiltersSheet> {
                     status: _status,
                   ),
                 ),
-                child: const Text('Aplicar filtros'),
               ),
-              TextButton(
+              const SizedBox(height: AppSpacing.xs),
+              AppSecondaryButton(
+                label: 'Limpar filtros',
                 onPressed: () =>
                     Navigator.pop(context, const AppointmentFilters()),
-                child: const Text('Limpar filtros'),
               ),
             ],
           ),

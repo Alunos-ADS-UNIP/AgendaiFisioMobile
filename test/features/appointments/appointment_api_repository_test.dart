@@ -64,6 +64,39 @@ void main() {
     expect(specialties.single.name, 'Fisioterapia');
   });
 
+  test(
+    'lista e detalhe dos profissionais exigem bearer e tratam 401',
+    () async {
+      final captured = <http.Request>[];
+      var expired = false;
+      final repository = AppointmentApiRepository(
+        baseUri: Uri.parse('http://localhost:5048'),
+        tokenProvider: () async => token,
+        onUnauthorized: () async {
+          expired = true;
+        },
+        client: MockClient((request) async {
+          captured.add(request);
+          return http.Response('', 401);
+        }),
+      );
+      await expectLater(
+        repository.fetchProfessionals(),
+        throwsA(isA<AppointmentException>()),
+      );
+      await expectLater(
+        repository.fetchProfessional('professional-1'),
+        throwsA(isA<AppointmentException>()),
+      );
+      expect(captured, hasLength(2));
+      for (final request in captured) {
+        expect(request.headers['authorization'], 'Bearer $token');
+        expect(request.followRedirects, isFalse);
+      }
+      expect(expired, isTrue);
+    },
+  );
+
   test('GET de agenda envia token e converte data/status', () async {
     late http.Request captured;
     final repository = AppointmentApiRepository(

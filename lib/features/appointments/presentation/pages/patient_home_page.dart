@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 
 import '../../../../core/theme/app_spacing.dart';
 import '../../../../core/widgets/appointment_card.dart';
+import '../../../../core/widgets/app_primary_button.dart';
+import '../../../../core/widgets/app_secondary_button.dart';
 import '../../../../core/widgets/empty_state.dart';
 import '../../../../core/widgets/error_state.dart';
 import '../../domain/appointment.dart';
@@ -88,7 +90,7 @@ class _PatientHomePageState extends State<PatientHomePage> {
                 const SizedBox(height: AppSpacing.sm),
                 AppointmentCard(
                   dateLabel: MaterialLocalizations.of(context)
-                      .formatShortDate(futureAppointments.first.dateTime)
+                      .formatCompactDate(futureAppointments.first.dateTime)
                       .toUpperCase(),
                   timeLabel: MaterialLocalizations.of(context).formatTimeOfDay(
                     TimeOfDay.fromDateTime(futureAppointments.first.dateTime),
@@ -102,22 +104,22 @@ class _PatientHomePageState extends State<PatientHomePage> {
                 ),
               ],
               const SizedBox(height: AppSpacing.lg),
-              FilledButton.icon(
+              AppPrimaryButton(
                 onPressed: _newAppointment,
-                icon: const Icon(Icons.add),
-                label: const Text('Agendar consulta'),
+                icon: Icons.add,
+                label: 'Agendar consulta',
               ),
               const SizedBox(height: AppSpacing.sm),
-              OutlinedButton.icon(
+              AppSecondaryButton(
                 onPressed: _openAgenda,
-                icon: const Icon(Icons.calendar_month_outlined),
-                label: const Text('Minha agenda'),
+                icon: Icons.calendar_month_outlined,
+                label: 'Minha agenda',
               ),
               const SizedBox(height: AppSpacing.sm),
-              OutlinedButton.icon(
+              AppSecondaryButton(
                 onPressed: _openHistory,
-                icon: const Icon(Icons.history),
-                label: const Text('Histórico de consultas'),
+                icon: Icons.history,
+                label: 'Histórico de consultas',
               ),
             ],
           );

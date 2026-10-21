@@ -58,7 +58,7 @@ void main() {
       await tester.tap(find.text('Dra. Marina Lopes'));
       await tester.pumpAndSettle();
 
-      expect(find.text('Detalhes do agendamento'), findsOneWidget);
+      expect(find.text('Detalhes'), findsOneWidget);
       expect(find.text('Observações'), findsNothing);
       expect(find.text('CREFITO'), findsNothing);
     },

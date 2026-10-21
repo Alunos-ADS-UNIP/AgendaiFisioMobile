@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../../../core/theme/app_spacing.dart';
+import '../../../../core/theme/app_colors.dart';
 import '../../../../core/widgets/app_primary_button.dart';
 import '../../../../core/widgets/app_secondary_button.dart';
 import '../../../../core/widgets/status_chip.dart';
@@ -21,7 +22,7 @@ class AppointmentCreatedPage extends StatelessWidget {
   @override
   Widget build(BuildContext context) => Scaffold(
     appBar: AppBar(
-      title: const Text('Agendamento confirmado'),
+      title: const Text('Confirmação'),
       leading: IconButton(
         tooltip: 'Voltar à agenda',
         icon: const Icon(Icons.arrow_back),
@@ -34,7 +35,7 @@ class AppointmentCreatedPage extends StatelessWidget {
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            const Icon(Icons.check_circle, size: 68, color: Colors.green),
+            const Icon(Icons.check_circle, size: 64, color: AppColors.success),
             const SizedBox(height: AppSpacing.md),
             Text(
               'Agendamento criado',
@@ -46,8 +47,8 @@ class AppointmentCreatedPage extends StatelessWidget {
               appointment.professionalName,
               style: Theme.of(context).textTheme.titleMedium,
             ),
-              if (appointment.specialtyName.isNotEmpty)
-                Text(appointment.specialtyName),
+            if (appointment.specialtyName.isNotEmpty)
+              Text(appointment.specialtyName),
             Text(
               MaterialLocalizations.of(context)
                   .formatMediumDate(appointment.dateTime),

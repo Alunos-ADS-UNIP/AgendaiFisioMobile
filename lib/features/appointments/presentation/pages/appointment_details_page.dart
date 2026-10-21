@@ -27,7 +27,7 @@ class _AppointmentDetailsPageState extends State<AppointmentDetailsPage> {
 
   @override
   Widget build(BuildContext context) => Scaffold(
-    appBar: AppBar(title: const Text('Detalhes do agendamento')),
+    appBar: AppBar(title: const Text('Detalhes')),
     body: FutureBuilder<Appointment>(
       future: _appointment,
       builder: (context, snapshot) {

@@ -21,17 +21,19 @@ class StatusChip extends StatelessWidget {
           borderRadius: AppRadius.pill,
         ),
         child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
           child: Row(
             mainAxisSize: MainAxisSize.min,
             children: [
               Icon(style.icon, color: style.foreground, size: 16),
-              const SizedBox(width: 6),
-              Text(
-                style.label,
-                style: Theme.of(context).textTheme.labelMedium?.copyWith(
-                  color: style.foreground,
-                  fontWeight: FontWeight.w700,
+              const SizedBox(width: 4),
+              Flexible(
+                child: Text(
+                  style.label,
+                  style: Theme.of(context).textTheme.labelMedium?.copyWith(
+                    color: style.foreground,
+                    fontWeight: FontWeight.w700,
+                  ),
                 ),
               ),
             ],

@@ -24,7 +24,8 @@ sessão autenticada. Essa injeção é intencional: as rotas de agendamento exig
 Bearer e o módulo compartilhado de login ainda precisa fornecer o token e a ação
 global para sessão expirada. `AppointmentApiRepository` recebe a origem da API,
 um provedor de token e um callback para tratar `401`; o token não é armazenado
-nem incluído em rotas públicas de catálogo.
+nem incluído nas rotas públicas de especialidades. As rotas de profissionais
+também recebem o Bearer e acionam o callback de sessão em caso de `401`.
 
 O cadastro de agendamento envia apenas `profissionalId`, `dataHora` em UTC e
 observações opcionais. O `pacienteId` vem da identidade do JWT. O seletor trata
@@ -52,3 +53,22 @@ flutter pub get
 flutter analyze
 flutter test
 ```
+
+## Prévia das telas e padrão visual
+
+```bash
+flutter run -d chrome --web-port=5302 -t lib/main_appointments_preview.dart
+```
+
+A prévia abre a agenda com dados demonstrativos em memória. Ela permite testar
+filtros, detalhes, escolha de especialidade/profissional, data, horário e resumo
+de criação. Os dados não são enviados ao banco.
+
+O tema usa Inter incluída nos assets, corpo de 16 px, texto mínimo de 12 px,
+controles de pelo menos 48 px, raio de 12 px nos controles e 16 px nos modais.
+Há navegação Início, Agendar, Agenda e Perfil. O perfil real deve ser fornecido por
+`patientProfileBuilder`; enquanto não for integrado, a aba informa a dependência.
+
+Os testes `agenda_design_test.dart` percorrem as telas em 360 × 800 com texto a
+100% e 150%, incluindo a criação e o retorno com a lista atualizada. Para salvar
+as capturas da renderização, defina `AGENDA_SCREENSHOTS_DIR` ao rodar esse teste.

@@ -15,7 +15,8 @@ typedef AppointmentTokenProvider = Future<String?> Function();
 typedef SessionExpiredCallback = Future<void> Function();
 
 /// Repositório HTTP da agenda. O token só é anexado a chamadas da mesma origem
-/// configurada e nunca é enviado ao catálogo público nem a redirecionamentos.
+/// configurada; especialidades são públicas e profissionais exigem autenticação.
+/// Redirecionamentos não recebem o token.
 class AppointmentApiRepository implements AppointmentRepository {
   AppointmentApiRepository({
     required Uri baseUri,
@@ -210,7 +211,12 @@ class AppointmentApiRepository implements AppointmentRepository {
       'especialidadeId': ?specialtyId,
       if (active != null) 'ativo': '$active',
     };
-    final response = await _send('GET', '/api/profissional', query: query);
+    final response = await _send(
+      'GET',
+      '/api/profissional',
+      query: query,
+      authenticated: true,
+    );
     if (response.statusCode != 200) _throwForStatus(response.statusCode);
     try {
       return _readList(jsonDecode(response.body))
@@ -234,6 +240,7 @@ class AppointmentApiRepository implements AppointmentRepository {
     final response = await _send(
       'GET',
       '/api/profissional/${Uri.encodeComponent(id)}',
+      authenticated: true,
     );
     if (response.statusCode != 200) _throwForStatus(response.statusCode);
     try {
