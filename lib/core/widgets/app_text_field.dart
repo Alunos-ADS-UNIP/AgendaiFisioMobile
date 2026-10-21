@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 
 class AppTextField extends StatelessWidget {
   const AppTextField({
@@ -16,6 +17,14 @@ class AppTextField extends StatelessWidget {
     this.enabled = true,
     this.maxLines = 1,
     this.autofillHints,
+    // Adicionados pra viabilizar o formulário de perfil do paciente
+    // (A-FE-01): máscara de CPF/telefone/CEP e campo de data só leitura que
+    // abre o date picker ao tocar. Totalmente opcionais e com os mesmos
+    // valores padrão do TextFormField, então nenhum uso existente de
+    // AppTextField muda de comportamento.
+    this.inputFormatters,
+    this.readOnly = false,
+    this.onTap,
     super.key,
   });
 
@@ -33,6 +42,9 @@ class AppTextField extends StatelessWidget {
   final bool enabled;
   final int maxLines;
   final Iterable<String>? autofillHints;
+  final List<TextInputFormatter>? inputFormatters;
+  final bool readOnly;
+  final VoidCallback? onTap;
 
   @override
   Widget build(BuildContext context) {
@@ -47,6 +59,9 @@ class AppTextField extends StatelessWidget {
       enabled: enabled,
       maxLines: obscureText ? 1 : maxLines,
       autofillHints: autofillHints,
+      inputFormatters: inputFormatters,
+      readOnly: readOnly,
+      onTap: onTap,
       decoration: InputDecoration(
         labelText: label,
         hintText: hint,
