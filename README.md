@@ -4,7 +4,7 @@ Aplicativo Flutter do AgendaiFisio.
 
 ## Estado atual
 
-O projeto contém a fundação visual compartilhada e o fluxo de agenda do paciente:
+O projeto contém a fundação visual compartilhada, autenticação e o fluxo de agenda do paciente:
 
 - tema Material 3;
 - tokens de cor, espaçamento e borda;
@@ -16,16 +16,18 @@ O projeto contém a fundação visual compartilhada e o fluxo de agenda do pacie
 - início do paciente com próxima consulta, agenda, histórico e novo agendamento;
 - lista filtrada e paginada no cliente, detalhe e resumo após criar;
 - repositório HTTP para agendamentos, profissionais e especialidades.
+- login por e-mail e senha integrado ao JWT do backend;
+- restauração e encerramento de sessão com armazenamento seguro;
+- proteção de área por perfil (Paciente, Profissional e Administrador);
+- cadastro e perfil do paciente com consulta de endereço pelo ViaCEP;
 - arquivos de planejamento por feature e responsável.
 
-A aplicação abre inicialmente o catálogo de componentes. O fluxo do paciente é
-exibido quando `AgendaiFisioApp` recebe um `AppointmentRepository` criado pela
-sessão autenticada. Essa injeção é intencional: as rotas de agendamento exigem
-Bearer e o módulo compartilhado de login ainda precisa fornecer o token e a ação
-global para sessão expirada. `AppointmentApiRepository` recebe a origem da API,
-um provedor de token e um callback para tratar `401`; o token não é armazenado
-nem incluído nas rotas públicas de especialidades. As rotas de profissionais
-também recebem o Bearer e acionam o callback de sessão em caso de `401`.
+A aplicação abre na tela de login. O token é salvo no Keychain do iOS ou no
+Keystore do Android e é incluído apenas nas chamadas autenticadas. Na abertura,
+o app valida a sessão salva em `GET /api/Auth/me`; sessões expiradas ou respostas
+`401` voltam ao login. Pacientes entram na área de agenda, histórico e perfil.
+Profissionais e administradores permanecem em uma área protegida própria, sem
+acesso acidental às telas exclusivas de paciente.
 
 O cadastro de agendamento envia apenas `profissionalId`, `dataHora` em UTC e
 observações opcionais. O `pacienteId` vem da identidade do JWT. O seletor trata
@@ -54,6 +56,14 @@ flutter analyze
 flutter test
 ```
 
+Por padrão, o app usa `http://127.0.0.1:5048` no simulador do iPhone e
+`http://10.0.2.2:5048` no emulador Android. Outra origem pode ser informada sem
+alterar o código:
+
+```bash
+flutter run --dart-define=API_BASE_URL=https://api.exemplo.com
+```
+
 ## Prévia das telas e padrão visual
 
 ```bash
@@ -66,8 +76,8 @@ de criação. Os dados não são enviados ao banco.
 
 O tema usa Inter incluída nos assets, corpo de 16 px, texto mínimo de 12 px,
 controles de pelo menos 48 px, raio de 12 px nos controles e 16 px nos modais.
-Há navegação Início, Agendar, Agenda e Perfil. O perfil real deve ser fornecido por
-`patientProfileBuilder`; enquanto não for integrado, a aba informa a dependência.
+Há navegação Início, Agendar, Agenda e Perfil. O perfil está integrado à
+identidade do token, sem receber um `pacienteId` fornecido pela interface.
 
 Os testes `agenda_design_test.dart` percorrem as telas em 360 × 800 com texto a
 100% e 150%, incluindo a criação e o retorno com a lista atualizada. Para salvar

@@ -11,7 +11,7 @@ void main() {
   testWidgets('exibe o catálogo dos componentes compartilhados', (
     tester,
   ) async {
-    await tester.pumpWidget(const AgendaiFisioApp());
+    await tester.pumpWidget(const AgendaiFisioApp(showComponentCatalog: true));
 
     expect(find.text('AgendaiFisio - Componentes'), findsOneWidget);
     expect(find.text('Base compartilhada'), findsOneWidget);
@@ -38,7 +38,7 @@ void main() {
     addTearDown(tester.view.resetPhysicalSize);
     addTearDown(tester.view.resetDevicePixelRatio);
 
-    await tester.pumpWidget(const AgendaiFisioApp());
+    await tester.pumpWidget(const AgendaiFisioApp(showComponentCatalog: true));
     expect(tester.takeException(), isNull, reason: 'overflow no início');
 
     for (var index = 0; index < 10; index++) {
