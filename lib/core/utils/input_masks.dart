@@ -43,6 +43,7 @@ class MaskedInputFormatter extends TextInputFormatter {
 abstract final class InputMasks {
   static const cpf = '###.###.###-##';
   static const telefone = '(##) #####-####';
+  static const telefoneFixo = '(##) ####-####';
   static const cep = '#####-###';
 
   static String digitsOnly(String value) => value.replaceAll(RegExp(r'\D'), '');
@@ -50,6 +51,20 @@ abstract final class InputMasks {
   static MaskedInputFormatter cpfFormatter() => MaskedInputFormatter(cpf);
   static MaskedInputFormatter telefoneFormatter() =>
       MaskedInputFormatter(telefone);
+  static TextInputFormatter telefoneFlexFormatter() =>
+      TextInputFormatter.withFunction((oldValue, newValue) {
+        final formatted = applyTelefoneMask(newValue.text);
+        return TextEditingValue(
+          text: formatted,
+          selection: TextSelection.collapsed(offset: formatted.length),
+        );
+      });
+
+  static String applyTelefoneMask(String value) {
+    final digits = digitsOnly(value);
+    return applyMask(digits.length <= 10 ? telefoneFixo : telefone, digits);
+  }
+
   static MaskedInputFormatter cepFormatter() => MaskedInputFormatter(cep);
 
   /// Formata uma string já só com dígitos (como a que vem da API) para

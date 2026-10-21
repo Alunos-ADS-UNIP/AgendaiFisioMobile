@@ -3,6 +3,10 @@ import 'package:agendaifisiomobile/features/auth/data/auth_api.dart';
 import 'package:agendaifisiomobile/features/auth/data/session_storage.dart';
 import 'package:agendaifisiomobile/features/auth/domain/auth_session.dart';
 import 'package:agendaifisiomobile/features/auth/presentation/controllers/session_controller.dart';
+import 'package:agendaifisiomobile/core/network/api_client.dart';
+import 'package:agendaifisiomobile/features/professional_profile/data/dtos/professional_profile_dtos.dart';
+import 'package:agendaifisiomobile/features/professional_profile/data/professional_profile_api.dart';
+import 'package:agendaifisiomobile/features/professional_profile/domain/professional_profile.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
@@ -15,7 +19,12 @@ void main() {
       storage: _MemoryStorage(),
     );
 
-    await tester.pumpWidget(AgendaiFisioApp(sessionController: controller));
+    await tester.pumpWidget(
+      AgendaiFisioApp(
+        sessionController: controller,
+        professionalProfileApi: _FakeProfessionalApi(),
+      ),
+    );
     await tester.pumpAndSettle();
 
     expect(find.text('Boas-vindas'), findsOneWidget);
@@ -29,7 +38,12 @@ void main() {
       authGateway: _ProfessionalGateway(),
       storage: _MemoryStorage(),
     );
-    await tester.pumpWidget(AgendaiFisioApp(sessionController: controller));
+    await tester.pumpWidget(
+      AgendaiFisioApp(
+        sessionController: controller,
+        professionalProfileApi: _FakeProfessionalApi(),
+      ),
+    );
     await tester.pumpAndSettle();
 
     await tester.enterText(
@@ -40,10 +54,79 @@ void main() {
     await tester.tap(find.text('Entrar'));
     await tester.pumpAndSettle();
 
-    expect(find.text('Login realizado'), findsOneWidget);
-    expect(find.text('Profissional • fisio@example.com'), findsOneWidget);
+    expect(find.text('Meu perfil profissional'), findsOneWidget);
+    expect(find.text('Complete seus dados profissionais para começar.'), findsOneWidget);
     expect(find.byType(NavigationBar), findsNothing);
   });
+
+  testWidgets('cadastro profissional fica disponível pelo login', (
+    tester,
+  ) async {
+    final controller = SessionController(
+      authGateway: _ProfessionalGateway(),
+      storage: _MemoryStorage(),
+    );
+    final api = _FakeProfessionalApi();
+    await tester.pumpWidget(
+      AgendaiFisioApp(
+        sessionController: controller,
+        professionalProfileApi: api,
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('Criar conta'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Sou fisioterapeuta'));
+    await tester.pumpAndSettle();
+    expect(find.text('Cadastro de fisioterapeuta'), findsOneWidget);
+
+    await tester.enterText(
+      find.widgetWithText(TextFormField, 'E-mail'),
+      'novo@example.com',
+    );
+    await tester.enterText(
+      find.widgetWithText(TextFormField, 'Senha'),
+      'segredo123',
+    );
+    await tester.enterText(
+      find.widgetWithText(TextFormField, 'Confirmar senha'),
+      'segredo123',
+    );
+    await tester.tap(find.text('Criar conta'));
+    await tester.pumpAndSettle();
+
+    expect(api.registeredEmail, 'novo@example.com');
+    expect(find.text('Boas-vindas'), findsOneWidget);
+    expect(
+      find.text('Conta criada. Entre para completar seu perfil.'),
+      findsOneWidget,
+    );
+  });
+}
+
+class _FakeProfessionalApi extends ProfessionalProfileApi {
+  _FakeProfessionalApi() : super(ApiClient(baseUrl: 'http://localhost'));
+
+  String? registeredEmail;
+
+  @override
+  Future<ProfessionalProfile> fetchOwnProfile() async =>
+      const ProfessionalProfile(
+        id: 'professional-1',
+        name: 'Cadastro Pendente',
+        email: 'fisio@example.com',
+        crefito: '',
+        phone: '',
+        bio: '',
+        specialtyName: '',
+        isActive: true,
+      );
+
+  @override
+  Future<void> register(ProfessionalRegisterRequest request) async {
+    registeredEmail = request.email;
+  }
 }
 
 class _MemoryStorage implements SessionStorage {

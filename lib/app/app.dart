@@ -27,6 +27,11 @@ import '../features/patients/presentation/controllers/patient_register_controlle
 import '../features/patients/presentation/pages/patient_profile_form_page.dart';
 import '../features/patients/presentation/pages/patient_profile_page.dart';
 import '../features/patients/presentation/pages/patient_register_page.dart';
+import '../features/professional_profile/data/professional_profile_api.dart';
+import '../features/professional_profile/presentation/controllers/professional_profile_controller.dart';
+import '../features/professional_profile/presentation/controllers/professional_register_controller.dart';
+import '../features/professional_profile/presentation/pages/professional_profile_page.dart';
+import '../features/professional_profile/presentation/pages/professional_register_page.dart';
 
 class AgendaiFisioApp extends StatefulWidget {
   const AgendaiFisioApp({
@@ -35,6 +40,7 @@ class AgendaiFisioApp extends StatefulWidget {
     this.historyRepository,
     this.patientName,
     this.patientProfileBuilder,
+    this.professionalProfileApi,
     this.showComponentCatalog = false,
     super.key,
   });
@@ -46,6 +52,7 @@ class AgendaiFisioApp extends StatefulWidget {
   final HistoryRepository? historyRepository;
   final String? patientName;
   final WidgetBuilder? patientProfileBuilder;
+  final ProfessionalProfileApi? professionalProfileApi;
   final bool showComponentCatalog;
 
   @override
@@ -56,6 +63,7 @@ class _AgendaiFisioAppState extends State<AgendaiFisioApp> {
   SessionController? _sessionController;
   ApiClient? _apiClient;
   PatientApi? _patientApi;
+  ProfessionalProfileApi? _professionalProfileApi;
   AppointmentApiRepository? _appointmentRepository;
   HistoryApiRepository? _historyRepository;
   bool _ownsSessionController = false;
@@ -80,6 +88,8 @@ class _AgendaiFisioAppState extends State<AgendaiFisioApp> {
       authHeaderProvider: session.tokenProvider,
     );
     _patientApi = PatientApi(_apiClient!);
+    _professionalProfileApi =
+        widget.professionalProfileApi ?? ProfessionalProfileApi(_apiClient!);
     _appointmentRepository = AppointmentApiRepository(
       baseUri: Uri.parse(ApiConfig.baseUrl),
       tokenProvider: session.tokenProvider,
@@ -164,6 +174,13 @@ class _AgendaiFisioAppState extends State<AgendaiFisioApp> {
 
   Widget _authenticatedHome(SessionController session) {
     final user = session.user!;
+    if (user.role == UserRole.professional) {
+      return _ProfessionalHome(
+        key: ValueKey(user.userId),
+        api: _professionalProfileApi!,
+        onLogout: () => unawaited(session.logout()),
+      );
+    }
     if (user.role != UserRole.patient) {
       return RoleHomePage(
         user: user,
@@ -199,6 +216,54 @@ class _AgendaiFisioAppState extends State<AgendaiFisioApp> {
   }
 
   Future<void> _openRegistration(BuildContext context) async {
+    final role = await showModalBottomSheet<UserRole>(
+      context: context,
+      builder: (sheetContext) => SafeArea(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            ListTile(
+              leading: const Icon(Icons.person_outline),
+              title: const Text('Sou paciente'),
+              onTap: () => Navigator.of(sheetContext).pop(UserRole.patient),
+            ),
+            ListTile(
+              leading: const Icon(Icons.medical_services_outlined),
+              title: const Text('Sou fisioterapeuta'),
+              onTap: () =>
+                  Navigator.of(sheetContext).pop(UserRole.professional),
+            ),
+          ],
+        ),
+      ),
+    );
+    if (role == null || !context.mounted) return;
+    if (role == UserRole.professional) {
+      final controller = ProfessionalRegisterController(
+        _professionalProfileApi!,
+      );
+      try {
+        final registered = await Navigator.of(context).push<bool>(
+          MaterialPageRoute(
+            builder: (routeContext) => ProfessionalRegisterPage(
+              controller: controller,
+              onRegistered: () => Navigator.of(routeContext).pop(true),
+              onGoToLogin: () => Navigator.of(routeContext).pop(false),
+            ),
+          ),
+        );
+        if (registered == true && context.mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('Conta criada. Entre para completar seu perfil.'),
+            ),
+          );
+        }
+      } finally {
+        controller.dispose();
+      }
+      return;
+    }
     final registered = await Navigator.of(context).push<bool>(
       MaterialPageRoute(
         builder: (routeContext) => PatientRegisterPage(
@@ -216,6 +281,42 @@ class _AgendaiFisioAppState extends State<AgendaiFisioApp> {
       );
     }
   }
+}
+
+class _ProfessionalHome extends StatefulWidget {
+  const _ProfessionalHome({
+    required this.api,
+    required this.onLogout,
+    super.key,
+  });
+
+  final ProfessionalProfileApi api;
+  final VoidCallback onLogout;
+
+  @override
+  State<_ProfessionalHome> createState() => _ProfessionalHomeState();
+}
+
+class _ProfessionalHomeState extends State<_ProfessionalHome> {
+  late final ProfessionalProfileController _controller;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = ProfessionalProfileController(widget.api);
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) => ProfessionalProfilePage(
+    controller: _controller,
+    onLogout: widget.onLogout,
+  );
 }
 
 class _SessionSplash extends StatelessWidget {
