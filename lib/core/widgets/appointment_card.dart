@@ -27,6 +27,8 @@ class AppointmentCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Material(
+      elevation: 1,
+      shadowColor: AppColors.divider,
       color: AppColors.surface,
       shape: const RoundedRectangleBorder(
         borderRadius: AppRadius.large,
@@ -38,7 +40,13 @@ class AppointmentCard extends StatelessWidget {
         child: Padding(
           padding: const EdgeInsets.all(AppSpacing.md),
           child: LayoutBuilder(
-            builder: (context, constraints) => Row(
+            builder: (context, constraints) => Flex(
+              mainAxisSize: MainAxisSize.min,
+              direction:
+                  MediaQuery.textScalerOf(context).scale(16) > 20 &&
+                      constraints.maxWidth < 400
+                  ? Axis.vertical
+                  : Axis.horizontal,
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 DecoratedBox(
@@ -64,8 +72,8 @@ class AppointmentCard extends StatelessWidget {
                     ),
                   ),
                 ),
-                const SizedBox(width: AppSpacing.sm),
-                Expanded(
+                const SizedBox(width: AppSpacing.sm, height: AppSpacing.sm),
+                Flexible(
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
