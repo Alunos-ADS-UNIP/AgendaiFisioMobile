@@ -27,39 +27,38 @@ class ApiClient {
   final http.Client _client;
   final AuthHeaderProvider? authHeaderProvider;
 
-  Future<Map<String, dynamic>> get(
-    String path, {
-    bool authenticated = true,
-  }) async {
-    final response = await _client.get(
-      Uri.parse('$baseUrl$path'),
-      headers: await _buildHeaders(authenticated: authenticated),
-    );
-    return _decode(response);
-  }
+  Future<Map<String, dynamic>> get(String path, {bool authenticated = true}) =>
+      _send('GET', path, authenticated: authenticated);
 
   Future<Map<String, dynamic>> post(
     String path,
     Map<String, dynamic> body, {
     bool authenticated = false,
-  }) async {
-    final response = await _client.post(
-      Uri.parse('$baseUrl$path'),
-      headers: await _buildHeaders(authenticated: authenticated),
-      body: jsonEncode(body),
-    );
-    return _decode(response);
-  }
+  }) => _send('POST', path, body: body, authenticated: authenticated);
 
   Future<Map<String, dynamic>> put(
     String path,
     Map<String, dynamic> body, {
     bool authenticated = true,
+  }) => _send('PUT', path, body: body, authenticated: authenticated);
+
+  Future<Map<String, dynamic>> _send(
+    String method,
+    String path, {
+    Map<String, dynamic>? body,
+    required bool authenticated,
   }) async {
-    final response = await _client.put(
-      Uri.parse('$baseUrl$path'),
-      headers: await _buildHeaders(authenticated: authenticated),
-      body: jsonEncode(body),
+    final base = Uri.parse(baseUrl);
+    final uri = base.resolve(path);
+    if (uri.origin != base.origin) {
+      throw ArgumentError.value(path, 'path', 'A rota saiu da origem da API.');
+    }
+    final request = http.Request(method, uri)
+      ..followRedirects = false
+      ..headers.addAll(await _buildHeaders(authenticated: authenticated));
+    if (body != null) request.body = jsonEncode(body);
+    final response = await http.Response.fromStream(
+      await _client.send(request),
     );
     return _decode(response);
   }

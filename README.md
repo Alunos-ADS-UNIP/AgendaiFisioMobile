@@ -74,6 +74,26 @@ A prévia abre a agenda com dados demonstrativos em memória. Ela permite testar
 filtros, detalhes, escolha de especialidade/profissional, data, horário e resumo
 de criação. Os dados não são enviados ao banco.
 
+## Perfil do profissional
+
+`lib/features/professional_profile/` contém cadastro de conta profissional,
+resumo do próprio perfil e formulário de completar/editar. O cadastro usa
+`POST /api/auth/register` sem Bearer e, após sucesso, a navegação deve levar ao
+login compartilhado. `ProfessionalProfilePage` recebe um
+`ProfessionalProfileController` e um callback de logout da sessão. O controller
+consulta `/api/auth/me`, confirma o papel `Profissional` e usa o `perfilId` da
+resposta para buscar os dados públicos em `/api/profissional/{id}`. O formulário
+envia `PUT /api/profissional/completar-perfil` sem incluir IDs técnicos nem
+especialidade. A situação `ativo` é preservada a partir do detalhe carregado.
+
+O backend ainda não fornece `GET /api/profissional/me` com CPF e data de
+nascimento. Esses campos são obrigatórios no PUT, então precisam ser informados
+novamente ao abrir o formulário após reiniciar a sessão; somente um envio
+confirmado os mantém em memória durante a sessão atual. A troca de especialidade
+é acionada por `onChangeSpecialty`, para usar a tela e o seletor do módulo de
+especialidades quando estiverem integrados. O fluxo de login compartilhado ainda
+deve montar essas páginas na navegação autenticada.
+
 O tema usa Inter incluída nos assets, corpo de 16 px, texto mínimo de 12 px,
 controles de pelo menos 48 px, raio de 12 px nos controles e 16 px nos modais.
 Há navegação Início, Agendar, Agenda e Perfil. O perfil está integrado à
