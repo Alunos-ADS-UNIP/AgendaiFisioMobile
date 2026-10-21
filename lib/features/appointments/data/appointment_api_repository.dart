@@ -34,6 +34,10 @@ class AppointmentApiRepository implements AppointmentRepository {
   final bool _ownsClient;
   final Map<String, Professional> _professionals = {};
 
+  void dispose() {
+    if (_ownsClient) _client.close();
+  }
+
   static Uri _normalizeBaseUri(Uri uri) {
     if (!uri.hasAuthority || (uri.scheme != 'http' && uri.scheme != 'https')) {
       throw ArgumentError.value(
