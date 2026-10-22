@@ -106,6 +106,7 @@ class _LoginPageState extends State<LoginPage> {
                               showPassword: _showPassword,
                               isLoading: isLoading,
                               errorMessage: widget.controller.errorMessage,
+                              sessionExpired: widget.controller.sessionExpired,
                               validateEmail: _validateEmail,
                               validatePassword: _validatePassword,
                               onTogglePassword: () => setState(
@@ -198,6 +199,7 @@ class _LoginCard extends StatelessWidget {
     required this.showPassword,
     required this.isLoading,
     required this.errorMessage,
+    required this.sessionExpired,
     required this.validateEmail,
     required this.validatePassword,
     required this.onTogglePassword,
@@ -212,6 +214,7 @@ class _LoginCard extends StatelessWidget {
   final bool showPassword;
   final bool isLoading;
   final String? errorMessage;
+  final bool sessionExpired;
   final FormFieldValidator<String> validateEmail;
   final FormFieldValidator<String> validatePassword;
   final VoidCallback onTogglePassword;
@@ -250,6 +253,10 @@ class _LoginCard extends StatelessWidget {
               style: Theme.of(context).textTheme.bodyMedium
                   ?.copyWith(color: AppColors.textSecondary),
             ),
+            if (sessionExpired) ...[
+              const SizedBox(height: AppSpacing.md),
+              const _SessionExpiredNotice(),
+            ],
             const SizedBox(height: AppSpacing.lg),
             AppTextField(
               key: const Key('login-email'),
@@ -314,6 +321,35 @@ class _LoginCard extends StatelessWidget {
             ),
           ],
         ),
+      ),
+    ),
+  );
+}
+
+class _SessionExpiredNotice extends StatelessWidget {
+  const _SessionExpiredNotice();
+
+  @override
+  Widget build(BuildContext context) => Semantics(
+    liveRegion: true,
+    child: Container(
+      key: const Key('session-expired-notice'),
+      padding: const EdgeInsets.all(AppSpacing.sm),
+      decoration: const BoxDecoration(
+        color: AppColors.primaryLight,
+        borderRadius: AppRadius.medium,
+      ),
+      child: const Row(
+        children: [
+          Icon(Icons.lock_clock_outlined, color: AppColors.primary),
+          SizedBox(width: AppSpacing.sm),
+          Expanded(
+            child: Text(
+              'Sua sessão expirou. Entre novamente para continuar.',
+              style: TextStyle(color: AppColors.primary),
+            ),
+          ),
+        ],
       ),
     ),
   );
