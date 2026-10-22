@@ -31,6 +31,12 @@ class SessionController extends ChangeNotifier {
   String? get accessToken => _session?.accessToken;
   String? _errorMessage;
   String? get errorMessage => _errorMessage;
+  bool _sessionExpired = false;
+
+  /// `true` quando a sessão acabou por conta do servidor (401/token vencido)
+  /// e não porque a pessoa clicou em "Sair". A tela de login usa isso para
+  /// explicar por que o usuário voltou para ela.
+  bool get sessionExpired => _sessionExpired;
   bool get isBusy =>
       _status == SessionStatus.restoring ||
       _status == SessionStatus.authenticating;
@@ -68,6 +74,7 @@ class SessionController extends ChangeNotifier {
   Future<bool> login({required String email, required String password}) async {
     _status = SessionStatus.authenticating;
     _errorMessage = null;
+    _sessionExpired = false;
     notifyListeners();
     try {
       final session = await _authGateway.login(
@@ -95,8 +102,9 @@ class SessionController extends ChangeNotifier {
   }
 
   void clearError() {
-    if (_errorMessage == null) return;
+    if (_errorMessage == null && !_sessionExpired) return;
     _errorMessage = null;
+    _sessionExpired = false;
     notifyListeners();
   }
 
@@ -109,10 +117,21 @@ class SessionController extends ChangeNotifier {
         // A sessão local sempre termina, mesmo se a API estiver indisponível.
       }
     }
-    await expireSession();
+    await _endSession();
   }
 
-  Future<void> expireSession() async {
+  /// Chamado quando a API recusa o token (401). Encerra a sessão e marca que
+  /// foi expiração, para o login avisar o usuário.
+    Future<void> expireSession() async {
+    final shouldNotify = _session != null || _sessionExpired;
+    await _endSession();
+    if (shouldNotify) {
+      _sessionExpired = true;
+      notifyListeners();
+    }
+  }
+
+  Future<void> _endSession() async {
     await _clearStorage();
     _setUnauthenticated();
     notifyListeners();
@@ -138,5 +157,6 @@ class SessionController extends ChangeNotifier {
     _session = null;
     _status = SessionStatus.unauthenticated;
     _errorMessage = null;
+    _sessionExpired = false;
   }
 }

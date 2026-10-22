@@ -54,6 +54,43 @@ void main() {
       expect(gateway.meTokens, isEmpty);
     });
 
+    test('expireSession (401) marca a sessão como expirada', () async {
+      final controller = SessionController(
+        authGateway: _FakeAuthGateway(
+          loginResult: _session(expiresAt: now.add(const Duration(hours: 1))),
+        ),
+        storage: _MemoryStorage(),
+        now: () => now,
+      );
+      await controller.login(email: 'ana@example.com', password: 'segredo');
+
+      await controller.expireSession();
+      expect(controller.status, SessionStatus.unauthenticated);
+      expect(controller.sessionExpired, isTrue);
+
+      // Vários 401 simultâneos não podem apagar o aviso.
+      await controller.expireSession();
+      expect(controller.sessionExpired, isTrue);
+
+      controller.clearError();
+      expect(controller.sessionExpired, isFalse);
+    });
+
+    test('logout voluntário não marca a sessão como expirada', () async {
+      final controller = SessionController(
+        authGateway: _FakeAuthGateway(
+          loginResult: _session(expiresAt: now.add(const Duration(hours: 1))),
+        ),
+        storage: _MemoryStorage(),
+        now: () => now,
+      );
+      await controller.login(email: 'ana@example.com', password: 'segredo');
+
+      await controller.logout();
+
+      expect(controller.sessionExpired, isFalse);
+    });
+
     test('login salva a sessão e disponibiliza somente o token cru', () async {
       final expected = _session(expiresAt: now.add(const Duration(hours: 1)));
       final storage = _MemoryStorage();
