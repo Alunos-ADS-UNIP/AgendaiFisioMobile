@@ -72,6 +72,20 @@ void main() {
     expect(find.text('E-mail ou senha incorretos.'), findsNothing);
   });
 
+  testWidgets('avisa que a sessão expirou e some ao editar', (tester) async {
+    final controller = await _controller(gateway: _LoginGateway(session: _ok));
+    await controller.login(email: 'ana@example.com', password: 'segredo');
+    await controller.expireSession();
+    await _pumpLogin(tester, controller);
+
+    expect(find.byKey(const Key('session-expired-notice')), findsOneWidget);
+    expect(find.textContaining('Sua sessão expirou'), findsOneWidget);
+
+    await tester.enterText(find.byKey(const Key('login-email')), 'a');
+    await tester.pump();
+    expect(find.byKey(const Key('session-expired-notice')), findsNothing);
+  });
+
   testWidgets('não apresenta overflow em iPhone compacto', (tester) async {
     tester.view.physicalSize = const Size(375, 667);
     tester.view.devicePixelRatio = 1;
@@ -125,8 +139,9 @@ class _EmptyStorage implements SessionStorage {
 }
 
 class _LoginGateway implements AuthGateway {
-  _LoginGateway({this.error});
+  _LoginGateway({this.error, this.session});
   final Object? error;
+  final AuthSession? session;
 
   @override
   Future<AuthSession> login({
@@ -134,6 +149,7 @@ class _LoginGateway implements AuthGateway {
     required String password,
   }) async {
     if (error != null) throw error!;
+    if (session != null) return session!;
     throw UnimplementedError();
   }
 
@@ -144,3 +160,14 @@ class _LoginGateway implements AuthGateway {
   Future<AuthenticatedUser> me(String accessToken) async =>
       throw UnimplementedError();
 }
+
+final _ok = AuthSession(
+  accessToken: 'jwt-token',
+  expiresAtUtc: DateTime.now().toUtc().add(const Duration(hours: 1)),
+  user: const AuthenticatedUser(
+    userId: 'user-1',
+    profileId: 'patient-1',
+    email: 'ana@example.com',
+    role: UserRole.patient,
+  ),
+);
