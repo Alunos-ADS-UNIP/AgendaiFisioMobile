@@ -9,6 +9,7 @@ class Appointment {
     required this.status,
     this.specialtyName = '',
     this.observations,
+    this.patientName = '',
   });
 
   final String id;
@@ -20,4 +21,7 @@ class Appointment {
   final AppointmentStatus status;
   final String specialtyName;
   final String? observations;
+
+  /// Nome do paciente (pacienteNome da API). Vazio quando a API não envia.
+  final String patientName;
 }

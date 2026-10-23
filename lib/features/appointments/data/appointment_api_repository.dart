@@ -321,6 +321,7 @@ class AppointmentApiRepository implements AppointmentRepository {
       status: _statusFromApi(_string(json, const ['status'])),
       specialtyName: _string(json, const ['especialidadeNome']),
       observations: _nullableString(json, const ['observacoes']),
+      patientName: _string(json, const ['pacienteNome']),
     );
   }
 

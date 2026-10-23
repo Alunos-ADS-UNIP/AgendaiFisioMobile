@@ -13,6 +13,9 @@ import '../features/appointments/data/appointment_api_repository.dart';
 import '../features/appointments/domain/appointment_repository.dart';
 import '../features/appointments/presentation/pages/patient_area_page.dart';
 import '../features/auth/data/auth_api.dart';
+import '../features/availability/domain/availability_repository.dart';
+import '../features/availability/presentation/pages/professional_availability_page.dart';
+import '../features/availability/presentation/pages/professional_home_page.dart';
 import '../features/auth/data/session_storage.dart';
 import '../features/auth/domain/auth_session.dart';
 import '../features/auth/presentation/controllers/session_controller.dart';
@@ -178,6 +181,8 @@ class _AgendaiFisioAppState extends State<AgendaiFisioApp> {
       return _ProfessionalHome(
         key: ValueKey(user.userId),
         api: _professionalProfileApi!,
+        repository: _appointmentRepository!,
+        professionalName: user.email.split('@').first,
         onLogout: () => unawaited(session.logout()),
       );
     }
@@ -286,11 +291,15 @@ class _AgendaiFisioAppState extends State<AgendaiFisioApp> {
 class _ProfessionalHome extends StatefulWidget {
   const _ProfessionalHome({
     required this.api,
+    required this.repository,
+    required this.professionalName,
     required this.onLogout,
     super.key,
   });
 
   final ProfessionalProfileApi api;
+  final AppointmentRepository repository;
+  final String professionalName;
   final VoidCallback onLogout;
 
   @override
@@ -313,9 +322,31 @@ class _ProfessionalHomeState extends State<_ProfessionalHome> {
   }
 
   @override
-  Widget build(BuildContext context) => ProfessionalProfilePage(
-    controller: _controller,
+  Widget build(BuildContext context) => ProfessionalHomePage(
+    repository: widget.repository,
+    professionalName: widget.professionalName,
     onLogout: widget.onLogout,
+    // Backend ainda sem rotas de grade: o repositório "indisponível" faz a
+    // tela mostrar o estado honesto. Trocar pelo HTTP quando houver contrato.
+    onOpenSchedule: () => Navigator.of(context).push<void>(
+      MaterialPageRoute(
+        builder: (_) => const ProfessionalAvailabilityPage(
+          repository: UnavailableAvailabilityRepository(),
+        ),
+      ),
+    ),
+    onOpenProfile: () => Navigator.of(context).push<void>(
+      MaterialPageRoute(
+        builder: (_) => ProfessionalProfilePage(
+          controller: _controller,
+          onLogout: () {
+            // Fecha o perfil antes de encerrar a sessão.
+            Navigator.of(context).pop();
+            widget.onLogout();
+          },
+        ),
+      ),
+    ),
   );
 }
 
