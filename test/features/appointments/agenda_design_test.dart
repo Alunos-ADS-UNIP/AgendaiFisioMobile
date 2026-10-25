@@ -95,8 +95,17 @@ void main() {
         await tester.tap(find.text('Fisioterapia esportiva').last);
         await tester.pumpAndSettle();
         _noOverflow(tester);
+        final continueButton = find.widgetWithText(
+          FilledButton,
+          'Escolher data e horário',
+        );
+        expect(tester.widget<FilledButton>(continueButton).onPressed, isNull);
         await tester.tap(find.text('Dra. Marina Lopes'));
         await tester.pumpAndSettle();
+        expect(
+          tester.widget<FilledButton>(continueButton).onPressed,
+          isNotNull,
+        );
         await _capture(tester, 'profissional-$scale');
         await tester.ensureVisible(find.text('Escolher data e horário'));
         await tester.tap(find.text('Escolher data e horário'));
@@ -108,11 +117,8 @@ void main() {
         _noOverflow(tester);
         await tester.tap(find.text('OK'));
         await tester.pumpAndSettle();
-        await tester.ensureVisible(find.text('Selecionar horário'));
-        await tester.tap(find.text('Selecionar horário'));
-        await tester.pumpAndSettle();
-        _noOverflow(tester);
-        await tester.tap(find.text('OK'));
+        await tester.ensureVisible(find.text('09:00'));
+        await tester.tap(find.text('09:00'));
         await tester.pumpAndSettle();
         await tester.enterText(
           find.byType(TextFormField),

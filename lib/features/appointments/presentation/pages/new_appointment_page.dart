@@ -29,6 +29,8 @@ class NewAppointmentPage extends StatefulWidget {
 }
 
 class _NewAppointmentPageState extends State<NewAppointmentPage> {
+  static const _availableHours = [9, 10, 11, 12, 13, 14, 15, 16, 17, 18];
+
   final _notesController = TextEditingController();
   List<Specialty> _specialties = const [];
   List<Professional> _professionals = const [];
@@ -152,18 +154,17 @@ class _NewAppointmentPageState extends State<NewAppointmentPage> {
     }
   }
 
-  Future<void> _selectTime() async {
-    final picked = await showTimePicker(
-      context: context,
-      initialTime: _time ?? const TimeOfDay(hour: 9, minute: 0),
-      helpText: 'Escolha o horário',
-    );
-    if (picked != null && mounted) {
-      setState(() {
-        _time = picked;
-        _error = null;
-      });
-    }
+  void _selectTime(int hour) {
+    setState(() {
+      _time = TimeOfDay(hour: hour, minute: 0);
+      _error = null;
+    });
+  }
+
+  bool _isHourInFuture(int hour) {
+    if (_day == null) return false;
+    final dateTime = DateTime(_day!.year, _day!.month, _day!.day, hour);
+    return dateTime.isAfter(DateTime.now());
   }
 
   DateTime? get _selectedDateTime {
@@ -263,7 +264,12 @@ class _NewAppointmentPageState extends State<NewAppointmentPage> {
         ? ErrorState(message: _error!, onRetry: _loadInitialData)
         : SafeArea(
             child: ListView(
-              padding: const EdgeInsets.all(AppSpacing.md),
+              padding: const EdgeInsets.fromLTRB(
+                AppSpacing.md,
+                AppSpacing.md,
+                AppSpacing.md,
+                104,
+              ),
               children: [
                 Text(
                   'Etapa ${_step + 1} de 3',
@@ -287,25 +293,38 @@ class _NewAppointmentPageState extends State<NewAppointmentPage> {
                     ),
                   ),
                 ],
-                const SizedBox(height: AppSpacing.lg),
-                if (_step < 2)
-                  AppPrimaryButton(
-                    label: _step == 0
-                        ? 'Escolher especialidade'
-                        : 'Escolher data e horário',
-                    onPressed: _canContinue ? _continue : null,
-                  )
-                else
-                  AppPrimaryButton(
-                    label: 'Confirmar agendamento',
-                    icon: Icons.check,
-                    isLoading: _submitting,
-                    onPressed: _isDateTimeValid ? _submit : null,
-                  ),
               ],
             ),
           ),
+    floatingActionButtonLocation: FloatingActionButtonLocation.centerFloat,
+    floatingActionButton: _loading || (_error != null && _specialties.isEmpty)
+        ? null
+        : SizedBox(
+            width: MediaQuery.sizeOf(context).width - (AppSpacing.md * 2),
+            child: Material(
+              elevation: 6,
+              color: Colors.transparent,
+              borderRadius: const BorderRadius.all(Radius.circular(12)),
+              child: _actionButton(),
+            ),
+          ),
   );
+
+  Widget _actionButton() {
+    if (_step == 2) {
+      return AppPrimaryButton(
+        label: 'Confirmar agendamento',
+        icon: Icons.check,
+        isLoading: _submitting,
+        onPressed: _isDateTimeValid ? _submit : null,
+      );
+    }
+
+    return AppPrimaryButton(
+      label: _step == 0 ? 'Escolher especialidade' : 'Escolher data e horário',
+      onPressed: _canContinue ? _continue : null,
+    );
+  }
 
   bool get _canContinue =>
       _step == 0 ? _specialty != null : _professional != null;
@@ -400,11 +419,37 @@ class _NewAppointmentPageState extends State<NewAppointmentPage> {
             ? 'Selecionar data'
             : MaterialLocalizations.of(context).formatMediumDate(_day!),
       ),
+      const SizedBox(height: AppSpacing.md),
+      Text('Escolha o horário', style: Theme.of(context).textTheme.titleMedium),
       const SizedBox(height: AppSpacing.xs),
-      AppSecondaryButton(
-        onPressed: _selectTime,
-        icon: Icons.schedule_outlined,
-        label: _time == null ? 'Selecionar horário' : _time!.format(context),
+      Text(
+        _day == null
+            ? 'Selecione uma data para liberar os horários.'
+            : 'As consultas começam sempre em horas inteiras.',
+        style: Theme.of(context).textTheme.bodySmall,
+      ),
+      const SizedBox(height: AppSpacing.sm),
+      Wrap(
+        spacing: AppSpacing.xs,
+        runSpacing: AppSpacing.xs,
+        children: [
+          for (final hour in _availableHours)
+            Semantics(
+              button: true,
+              selected: _time?.hour == hour,
+              label: 'Horário ${hour.toString().padLeft(2, '0')}:00',
+              child: ChoiceChip(
+                label: Text('${hour.toString().padLeft(2, '0')}:00'),
+                selected: _time?.hour == hour,
+                showCheckmark: true,
+                onSelected: _isHourInFuture(hour)
+                    ? (selected) {
+                        if (selected) _selectTime(hour);
+                      }
+                    : null,
+              ),
+            ),
+        ],
       ),
       const SizedBox(height: AppSpacing.sm),
       AppTextField(
