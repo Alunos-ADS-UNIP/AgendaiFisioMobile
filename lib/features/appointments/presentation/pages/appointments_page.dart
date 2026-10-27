@@ -18,12 +18,18 @@ class AppointmentsPage extends StatefulWidget {
     required this.repository,
     this.initialFilters = const AppointmentFilters(),
     this.title = 'Minha agenda',
+    this.professionalView = false,
     super.key,
   });
 
   final AppointmentRepository repository;
   final AppointmentFilters initialFilters;
   final String title;
+
+  /// Visão do fisioterapeuta: só consulta a agenda. Agendar é exclusivo do
+  /// paciente, então o botão e a ação de criar não aparecem, e o cartão mostra
+  /// o nome do paciente.
+  final bool professionalView;
 
   @override
   State<AppointmentsPage> createState() => _AppointmentsPageState();
@@ -58,11 +64,13 @@ class _AppointmentsPageState extends State<AppointmentsPage> {
         ),
       ],
     ),
-    floatingActionButton: FloatingActionButton.extended(
-      onPressed: _newAppointment,
-      icon: const Icon(Icons.add),
-      label: const Text('Agendar'),
-    ),
+    floatingActionButton: widget.professionalView
+        ? null
+        : FloatingActionButton.extended(
+            onPressed: _newAppointment,
+            icon: const Icon(Icons.add),
+            label: const Text('Agendar'),
+          ),
     body: ListenableBuilder(
       listenable: _controller,
       builder: (context, _) {
@@ -79,14 +87,16 @@ class _AppointmentsPageState extends State<AppointmentsPage> {
           return EmptyState(
             title: 'Nenhum agendamento encontrado',
             message: _controller.filters.isEmpty
-                ? 'Quando você marcar uma consulta, ela aparecerá aqui.'
+                ? (widget.professionalView
+                      ? 'Quando um paciente agendar uma consulta, ela aparecerá aqui.'
+                      : 'Quando você marcar uma consulta, ela aparecerá aqui.')
                 : 'Tente alterar ou limpar os filtros da agenda.',
             icon: Icons.calendar_month_outlined,
             actionLabel: _controller.filters.isEmpty
-                ? 'Criar agendamento'
+                ? (widget.professionalView ? null : 'Criar agendamento')
                 : 'Limpar filtros',
             onAction: _controller.filters.isEmpty
-                ? _newAppointment
+                ? (widget.professionalView ? null : _newAppointment)
                 : () => _controller.load(filters: const AppointmentFilters()),
           );
         }
@@ -107,7 +117,10 @@ class _AppointmentsPageState extends State<AppointmentsPage> {
                   child: AppointmentCard(
                     dateLabel: _dateLabel(context, item.dateTime),
                     timeLabel: _timeLabel(context, item.dateTime),
-                    personName: item.professionalName,
+                    personName:
+                        widget.professionalView && item.patientName.isNotEmpty
+                        ? item.patientName
+                        : item.professionalName,
                     specialtyName: item.specialtyName.isEmpty
                         ? 'Fisioterapia'
                         : item.specialtyName,

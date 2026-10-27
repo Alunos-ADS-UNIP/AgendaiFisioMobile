@@ -84,7 +84,14 @@ class ProfessionalProfileController extends ChangeNotifier {
     if (generation == _generation) notifyListeners();
   }
 
-  Future<bool> submit(ProfessionalUpdateRequest request) async {
+  /// Salva o perfil. Quando [specialtyId] é informado, a especialidade é
+  /// enviada antes (rota própria); se ela falhar, o perfil não é salvo e o
+  /// formulário continua aberto para nova tentativa.
+  Future<bool> submit(
+    ProfessionalUpdateRequest request, {
+    String? specialtyId,
+    String? specialtyName,
+  }) async {
     if (!canEdit || _isSubmitting) return false;
     final generation = _generation;
     final current = _profile!;
@@ -103,6 +110,18 @@ class ProfessionalProfileController extends ChangeNotifier {
         bio: request.bio,
         isActive: current.isActive,
       );
+      if (specialtyId != null) {
+        try {
+          await _api.updateOwnSpecialty(specialtyId);
+        } on ApiException catch (error) {
+          if (error.isUnauthorized) rethrow;
+          if (generation != _generation) return false;
+          _submitError = error.isValidation || error.isConflict
+              ? 'Não foi possível salvar a especialidade. Escolha outra.'
+              : 'Não foi possível salvar a especialidade. ${error.message}';
+          return false;
+        }
+      }
       await _api.updateOwnProfile(safeRequest);
       if (generation != _generation || _profile?.id != current.id) return false;
       _profile = current.copyWith(
@@ -110,6 +129,7 @@ class ProfessionalProfileController extends ChangeNotifier {
         crefito: safeRequest.crefito.trim(),
         phone: safeRequest.phone.replaceAll(RegExp(r'\D'), ''),
         bio: safeRequest.bio.trim(),
+        specialtyName: specialtyId != null ? specialtyName : null,
       );
       _cpfInSession = safeRequest.cpf.replaceAll(RegExp(r'\D'), '');
       _birthDateInSession = safeRequest.birthDate;

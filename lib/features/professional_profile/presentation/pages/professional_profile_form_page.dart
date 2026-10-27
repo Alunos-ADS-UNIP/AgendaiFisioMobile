@@ -5,6 +5,9 @@ import '../../../../core/utils/input_masks.dart';
 import '../../../../core/widgets/app_primary_button.dart';
 import '../../../../core/widgets/app_text_field.dart';
 import '../../../../core/widgets/error_state.dart';
+import '../../../appointments/domain/appointment_repository.dart';
+import '../../../appointments/domain/specialty.dart';
+import '../../../appointments/presentation/widgets/appointment_specialty_picker_sheet.dart';
 import '../../data/dtos/professional_profile_dtos.dart';
 import '../controllers/professional_profile_controller.dart';
 import '../widgets/profile_section.dart';
@@ -14,12 +17,22 @@ class ProfessionalProfileFormPage extends StatefulWidget {
     required this.controller,
     required this.onSaved,
     required this.onSessionExpired,
+    this.onLogout,
+    this.specialtyRepository,
     super.key,
   });
 
   final ProfessionalProfileController controller;
   final VoidCallback onSaved;
   final VoidCallback onSessionExpired;
+
+  /// Quando informado (primeiro acesso, sem tela anterior), mostra "Sair" na
+  /// barra superior.
+  final VoidCallback? onLogout;
+
+  /// Fonte do catálogo (GET /api/especialidade). Quando informado, o formulário
+  /// mostra o campo Especialidade, reutilizando o seletor já existente.
+  final AppointmentRepository? specialtyRepository;
 
   @override
   State<ProfessionalProfileFormPage> createState() =>
@@ -35,6 +48,8 @@ class _ProfessionalProfileFormPageState
   final _phone = TextEditingController();
   final _birthDateText = TextEditingController();
   final _bio = TextEditingController();
+  final _specialtyText = TextEditingController();
+  Specialty? _specialty;
   DateTime? _birthDate;
   bool _sessionExpiredHandled = false;
 
@@ -48,6 +63,7 @@ class _ProfessionalProfileFormPageState
       _crefito.text = profile.crefito;
       _phone.text = InputMasks.applyTelefoneMask(profile.phone);
       _bio.text = profile.bio;
+      _specialtyText.text = profile.specialtyName;
       _cpf.text = InputMasks.applyMask(
         InputMasks.cpf,
         widget.controller.cpfInSession ?? '',
@@ -66,6 +82,7 @@ class _ProfessionalProfileFormPageState
     _phone.dispose();
     _birthDateText.dispose();
     _bio.dispose();
+    _specialtyText.dispose();
     super.dispose();
   }
 
@@ -98,6 +115,21 @@ class _ProfessionalProfileFormPageState
     }
   }
 
+  Future<void> _chooseSpecialty() async {
+    final repository = widget.specialtyRepository;
+    if (repository == null) return;
+    final picked = await showModalBottomSheet<Specialty>(
+      context: context,
+      isScrollControlled: true,
+      builder: (_) => AppointmentSpecialtyPickerSheet(repository: repository),
+    );
+    if (picked == null || !mounted) return;
+    setState(() {
+      _specialty = picked;
+      _specialtyText.text = picked.name;
+    });
+  }
+
   Future<void> _submit() async {
     if (widget.controller.isSubmitting ||
         !widget.controller.canEdit ||
@@ -116,6 +148,8 @@ class _ProfessionalProfileFormPageState
         bio: _bio.text,
         isActive: widget.controller.profile!.isActive,
       ),
+      specialtyId: _specialty?.id,
+      specialtyName: _specialty?.name,
     );
     if (success && mounted) widget.onSaved();
   }
@@ -134,7 +168,17 @@ class _ProfessionalProfileFormPageState
     }
     final controller = widget.controller;
     return Scaffold(
-      appBar: AppBar(title: const Text('Editar perfil profissional')),
+      appBar: AppBar(
+        title: const Text('Editar perfil profissional'),
+        actions: [
+          if (widget.onLogout != null)
+            IconButton(
+              tooltip: 'Sair',
+              onPressed: widget.onLogout,
+              icon: const Icon(Icons.logout),
+            ),
+        ],
+      ),
       body: SafeArea(
         child: SingleChildScrollView(
           padding: const EdgeInsets.all(AppSpacing.lg),
@@ -215,6 +259,19 @@ class _ProfessionalProfileFormPageState
                   title: 'Atuação profissional',
                   child: Column(
                     children: [
+                      if (widget.specialtyRepository != null) ...[
+                        AppTextField(
+                          label: 'Especialidade',
+                          controller: _specialtyText,
+                          readOnly: true,
+                          onTap: _chooseSpecialty,
+                          suffixIcon: const Icon(Icons.arrow_drop_down),
+                          validator: (value) => (value?.trim().isEmpty ?? true)
+                              ? 'Escolha sua especialidade.'
+                              : null,
+                        ),
+                        const SizedBox(height: AppSpacing.md),
+                      ],
                       AppTextField(
                         label: 'CREFITO',
                         controller: _crefito,

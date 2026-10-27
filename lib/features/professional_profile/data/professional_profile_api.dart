@@ -26,6 +26,14 @@ class ProfessionalProfileApi {
     await _client.put('/api/profissional/completar-perfil', request.toJson());
   }
 
+  /// Escolhe ou troca a especialidade do profissional logado.
+  /// PUT /api/profissional/especialidade com {"especialidadeId": "..."}.
+  Future<void> updateOwnSpecialty(String specialtyId) async {
+    await _client.put('/api/profissional/especialidade', {
+      'especialidadeId': specialtyId,
+    });
+  }
+
   Future<void> register(ProfessionalRegisterRequest request) async {
     await _client.post(
       '/api/auth/register',

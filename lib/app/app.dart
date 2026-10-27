@@ -8,11 +8,14 @@ import '../core/config/api_config.dart';
 import '../core/network/api_client.dart';
 import '../core/theme/app_colors.dart';
 import '../core/theme/app_theme.dart';
+import '../core/widgets/error_state.dart';
 import '../development/component_catalog_page.dart';
 import '../features/appointments/data/appointment_api_repository.dart';
 import '../features/appointments/domain/appointment_repository.dart';
 import '../features/appointments/presentation/pages/patient_area_page.dart';
 import '../features/auth/data/auth_api.dart';
+import '../features/availability/domain/availability_repository.dart';
+import '../features/availability/presentation/pages/professional_area_page.dart';
 import '../features/auth/data/session_storage.dart';
 import '../features/auth/domain/auth_session.dart';
 import '../features/auth/presentation/controllers/session_controller.dart';
@@ -30,6 +33,7 @@ import '../features/patients/presentation/pages/patient_register_page.dart';
 import '../features/professional_profile/data/professional_profile_api.dart';
 import '../features/professional_profile/presentation/controllers/professional_profile_controller.dart';
 import '../features/professional_profile/presentation/controllers/professional_register_controller.dart';
+import '../features/professional_profile/presentation/pages/professional_profile_form_page.dart';
 import '../features/professional_profile/presentation/pages/professional_profile_page.dart';
 import '../features/professional_profile/presentation/pages/professional_register_page.dart';
 
@@ -178,6 +182,8 @@ class _AgendaiFisioAppState extends State<AgendaiFisioApp> {
       return _ProfessionalHome(
         key: ValueKey(user.userId),
         api: _professionalProfileApi!,
+        repository: _appointmentRepository!,
+        professionalName: user.email.split('@').first,
         onLogout: () => unawaited(session.logout()),
       );
     }
@@ -286,11 +292,15 @@ class _AgendaiFisioAppState extends State<AgendaiFisioApp> {
 class _ProfessionalHome extends StatefulWidget {
   const _ProfessionalHome({
     required this.api,
+    required this.repository,
+    required this.professionalName,
     required this.onLogout,
     super.key,
   });
 
   final ProfessionalProfileApi api;
+  final AppointmentRepository repository;
+  final String professionalName;
   final VoidCallback onLogout;
 
   @override
@@ -299,11 +309,12 @@ class _ProfessionalHome extends StatefulWidget {
 
 class _ProfessionalHomeState extends State<_ProfessionalHome> {
   late final ProfessionalProfileController _controller;
+  bool _logoutRequested = false;
 
   @override
   void initState() {
     super.initState();
-    _controller = ProfessionalProfileController(widget.api);
+    _controller = ProfessionalProfileController(widget.api)..load();
   }
 
   @override
@@ -312,10 +323,80 @@ class _ProfessionalHomeState extends State<_ProfessionalHome> {
     super.dispose();
   }
 
+  void _logoutOnce() {
+    if (_logoutRequested) return;
+    _logoutRequested = true;
+    widget.onLogout();
+  }
+
+  /// Primeiro acesso: o perfil precisa ser completado antes da tela principal.
+  /// Depois de salvar, o controller deixa de estar pendente e a tela principal
+  /// aparece sozinha.
   @override
-  Widget build(BuildContext context) => ProfessionalProfilePage(
-    controller: _controller,
-    onLogout: widget.onLogout,
+  Widget build(BuildContext context) => ListenableBuilder(
+    listenable: _controller,
+    builder: (context, _) {
+      final profile = _controller.profile;
+
+      if (_controller.isSessionExpired) {
+        WidgetsBinding.instance.addPostFrameCallback((_) => _logoutOnce());
+      }
+
+      // Só a primeira carga troca a tela; recargas posteriores (ex.: ao abrir
+      // o perfil) não derrubam a tela principal.
+      if (profile == null &&
+          _controller.status == ProfessionalProfileStatus.loading) {
+        return const _SessionSplash();
+      }
+      if (profile == null) {
+        return Scaffold(
+          appBar: AppBar(
+            title: const Text('AgendaiFisio'),
+            actions: [
+              IconButton(
+                tooltip: 'Sair',
+                onPressed: _logoutOnce,
+                icon: const Icon(Icons.logout),
+              ),
+            ],
+          ),
+          body: SafeArea(
+            child:
+                _controller.status == ProfessionalProfileStatus.forbidden
+                ? const ErrorState(
+                    title: 'Acesso restrito',
+                    message: 'Esta área é exclusiva para profissionais.',
+                  )
+                : ErrorState(
+                    message:
+                        _controller.loadError ?? 'Não foi possível carregar.',
+                    onRetry: _controller.load,
+                  ),
+          ),
+        );
+      }
+      if (profile.isPendingCompletion) {
+        return ProfessionalProfileFormPage(
+          controller: _controller,
+          onSaved: () {},
+          onSessionExpired: _logoutOnce,
+          onLogout: _logoutOnce,
+          specialtyRepository: widget.repository,
+        );
+      }
+      return ProfessionalAreaPage(
+        repository: widget.repository,
+        // Sem rotas de grade no backend ainda: a aba mostra "indisponível".
+        // Trocar pelo repositório HTTP quando houver contrato.
+        availabilityRepository: const UnavailableAvailabilityRepository(),
+        professionalName: widget.professionalName,
+        profileBuilder: (_) => ProfessionalProfilePage(
+          controller: _controller,
+          onLogout: widget.onLogout,
+          specialtyRepository: widget.repository,
+        ),
+      );
+    },
   );
 }
 

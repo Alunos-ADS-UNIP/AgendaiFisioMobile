@@ -306,6 +306,28 @@ void main() {
     expect(find.text('Alterar especialidade'), findsOneWidget);
   });
 
+  testWidgets('perfil não mostra Alterar especialidade sem ação', (
+    tester,
+  ) async {
+    final controller = ProfessionalProfileController(
+      _api(
+        MockClient(
+          (request) async => request.url.path == '/api/auth/me'
+              ? _json(_session)
+              : _json({..._detail, 'nomeCompleto': 'Joana Silva'}),
+        ),
+      ),
+    );
+    await tester.pumpWidget(
+      MaterialApp(
+        home: ProfessionalProfilePage(controller: controller, onLogout: () {}),
+      ),
+    );
+    await tester.pumpAndSettle();
+    expect(find.text('Joana Silva'), findsOneWidget);
+    expect(find.text('Alterar especialidade', skipOffstage: false), findsNothing);
+  });
+
   testWidgets('perfil e formulário cabem em 360 px com texto a 150%', (
     tester,
   ) async {
