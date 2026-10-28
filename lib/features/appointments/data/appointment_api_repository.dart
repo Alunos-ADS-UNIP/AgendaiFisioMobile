@@ -271,6 +271,17 @@ class AppointmentApiRepository
     if (response.statusCode != 200) _throwForStatus(response.statusCode);
   }
 
+  @override
+  Future<List<DateTime>> fetchBookedTimes(String professionalId) async {
+    final appointments = await fetchAppointments(
+      filters: AppointmentFilters(professionalId: professionalId),
+    );
+    return [
+      for (final item in appointments)
+        if (item.status != AppointmentStatus.cancelled) item.dateTime,
+    ];
+  }
+
   static bool _isBlock(Map<String, dynamic> json) =>
       _string(json, const ['status']).toLowerCase() ==
       _blockedStatus.toLowerCase();

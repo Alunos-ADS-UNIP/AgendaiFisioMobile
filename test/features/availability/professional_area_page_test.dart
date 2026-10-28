@@ -13,6 +13,7 @@ void main() {
         home: ProfessionalAreaPage(
           repository: AppointmentPreviewRepository(),
           availabilityRepository: const UnavailableAvailabilityRepository(),
+          professionalId: 'prof-teste',
           professionalName: 'Marina',
           profileBuilder: (_) => const Scaffold(body: Text('Tela de perfil')),
         ),

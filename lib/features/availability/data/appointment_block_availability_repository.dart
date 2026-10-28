@@ -25,6 +25,9 @@ abstract interface class ScheduleBlockGateway {
   });
 
   Future<void> cancelScheduleBlock(String id);
+
+  /// Horários de consultas ativas (não canceladas) do profissional.
+  Future<List<DateTime>> fetchBookedTimes(String professionalId);
 }
 
 /// Grade semanal guardada como agendamentos falsos.
@@ -140,12 +143,47 @@ class AppointmentBlockAvailabilityRepository implements AvailabilityRepository {
     });
   }
 
+  /// Horários do [date] na janela do seletor. Ordem de prioridade: consulta
+  /// marcada (ocupado) > bloqueio ou horário já passado (desabilitado) > livre.
   @override
   Future<List<AvailableSlot>> fetchSlots({
     required String professionalId,
     required DateTime date,
-  }) =>
-      Future.error(const AvailabilityException(AvailabilityFailure.unavailable));
+  }) async {
+    final now = _clock();
+    final day = _dateOnly(date);
+    final blocked = {
+      for (final b in await _guard(
+        () => gateway.fetchScheduleBlocks(professionalId),
+      ))
+        if (_dateOnly(b.dateTime) == day) _key(b.dateTime),
+    };
+    final booked = {
+      for (final t in await _guard(
+        () => gateway.fetchBookedTimes(professionalId),
+      ))
+        if (_dateOnly(t) == day) _key(t),
+    };
+    return [
+      for (final minutes in _daySlots)
+        _slot(_at(day, minutes), now, blocked, booked),
+    ];
+  }
+
+  static AvailableSlot _slot(
+    DateTime start,
+    DateTime now,
+    Set<String> blocked,
+    Set<String> booked,
+  ) {
+    final key = _key(start);
+    final state = booked.contains(key)
+        ? SlotState.busy
+        : blocked.contains(key) || !start.isAfter(now)
+        ? SlotState.disabled
+        : SlotState.free;
+    return AvailableSlot(start: start, state: state);
+  }
 
   Future<List<ScheduleBlock>> _futureBlocks() async {
     final now = _clock();

@@ -9,14 +9,20 @@ import '../../domain/availability_models.dart';
 import '../../domain/availability_repository.dart';
 import '../controllers/availability_controller.dart';
 import '../widgets/weekly_schedule.dart';
+import 'available_slots_page.dart';
 import 'weekly_schedule_form_page.dart';
 
 /// Grade semanal do fisioterapeuta: carregando, indisponível, erro, vazio e
 /// grade. Somente leitura; a edição virá na weekly_schedule_form_page.
 class ProfessionalAvailabilityPage extends StatefulWidget {
-  const ProfessionalAvailabilityPage({required this.repository, super.key});
+  const ProfessionalAvailabilityPage({
+    required this.repository,
+    required this.professionalId,
+    super.key,
+  });
 
   final AvailabilityRepository repository;
+  final String professionalId;
 
   @override
   State<ProfessionalAvailabilityPage> createState() =>
@@ -57,6 +63,18 @@ class _ProfessionalAvailabilityPageState
     appBar: AppBar(
       title: const Text('Grade de horários'),
       actions: [
+        IconButton(
+          tooltip: 'Ver horários do dia',
+          onPressed: () => Navigator.of(context).push(
+            MaterialPageRoute(
+              builder: (_) => AvailableSlotsPage(
+                repository: widget.repository,
+                professionalId: widget.professionalId,
+              ),
+            ),
+          ),
+          icon: const Icon(Icons.event_available_outlined),
+        ),
         ListenableBuilder(
           listenable: _controller,
           builder: (context, _) => IconButton(

@@ -14,8 +14,7 @@
 /// - `presentation/pages/weekly_schedule_form_page.dart`: ativar/desativar dia,
 ///   escolher início/fim e permitir turnos; impedir intervalos inválidos ou
 ///   sobrepostos antes de enviar.
-/// - `presentation/pages/available_slots_page.dart`: selecionar data e mostrar
-///   horários disponíveis, selecionados, ocupados e desabilitados.
+/// - r
 /// - `presentation/widgets/weekly_schedule.dart` e
 ///   `presentation/widgets/available_time_grid.dart`: componentes sem HTTP que
 ///   possam ser reutilizados por Liska no agendamento.

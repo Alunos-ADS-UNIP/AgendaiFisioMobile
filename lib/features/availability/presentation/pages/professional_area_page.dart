@@ -15,6 +15,7 @@ class ProfessionalAreaPage extends StatefulWidget {
   const ProfessionalAreaPage({
     required this.repository,
     required this.availabilityRepository,
+    required this.professionalId,
     required this.profileBuilder,
     this.professionalName,
     super.key,
@@ -22,6 +23,7 @@ class ProfessionalAreaPage extends StatefulWidget {
 
   final AppointmentRepository repository;
   final AvailabilityRepository availabilityRepository;
+  final String professionalId;
   final WidgetBuilder profileBuilder;
   final String? professionalName;
 
@@ -47,6 +49,7 @@ class _ProfessionalAreaPageState extends State<ProfessionalAreaPage> {
       ),
       2 => ProfessionalAvailabilityPage(
         repository: widget.availabilityRepository,
+        professionalId: widget.professionalId,
       ),
       _ => widget.profileBuilder(context),
     },
