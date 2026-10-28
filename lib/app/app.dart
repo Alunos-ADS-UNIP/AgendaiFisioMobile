@@ -397,7 +397,6 @@ class _ProfessionalHomeState extends State<_ProfessionalHome> {
             ),
           _ => const UnavailableAvailabilityRepository(),
         },
-        professionalId: profile.id,
         professionalName: widget.professionalName,
         profileBuilder: (_) => ProfessionalProfilePage(
           controller: _controller,

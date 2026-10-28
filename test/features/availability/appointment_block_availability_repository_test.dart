@@ -6,7 +6,6 @@ class _FakeGateway implements ScheduleBlockGateway {
   final blocks = <ScheduleBlock>[];
   final created = <DateTime>[];
   final cancelled = <String>[];
-  final booked = <DateTime>[];
   var _nextId = 0;
 
   @override
@@ -27,10 +26,6 @@ class _FakeGateway implements ScheduleBlockGateway {
     cancelled.add(id);
     blocks.removeWhere((b) => b.id == id);
   }
-
-  @override
-  Future<List<DateTime>> fetchBookedTimes(String professionalId) async =>
-      List.of(booked);
 }
 
 void main() {
@@ -124,24 +119,5 @@ void main() {
       DateTime(2026, 11, 2, 21, 30),
       DateTime(2026, 11, 2, 22, 0),
     ]);
-  });
-
-  test('horários do dia: livre, ocupado (consulta) e desabilitado (bloqueio)', () async {
-    await repository.saveWeeklySchedule(onlyMondayMorning());
-    gateway.booked.add(DateTime(2026, 11, 2, 9, 0));
-
-    final slots = await repository.fetchSlots(
-      professionalId: 'prof-1',
-      date: DateTime(2026, 11, 2),
-    );
-    SlotState stateAt(int hour, int minute) => slots
-        .firstWhere((s) => s.start == DateTime(2026, 11, 2, hour, minute))
-        .state;
-
-    expect(slots, hasLength(33));
-    expect(stateAt(8, 0), SlotState.free);
-    expect(stateAt(9, 0), SlotState.busy);
-    expect(stateAt(12, 0), SlotState.disabled);
-    expect(stateAt(6, 0), SlotState.disabled);
   });
 }
