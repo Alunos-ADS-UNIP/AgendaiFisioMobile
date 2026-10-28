@@ -237,7 +237,7 @@ void main() {
     );
     await tester.enterText(
       find.widgetWithText(TextFormField, 'CREFITO'),
-      'CREFITO-123',
+      '123456-F',
     );
     await tester.ensureVisible(
       find.widgetWithText(TextFormField, 'Data de nascimento'),
@@ -252,7 +252,7 @@ void main() {
 
     expect(find.text('CREFITO já cadastrado.'), findsOneWidget);
     expect(controller.profile!.isPendingCompletion, isTrue);
-    expect(find.widgetWithText(TextFormField, 'CREFITO-123'), findsOneWidget);
+    expect(find.widgetWithText(TextFormField, '123456-F'), findsOneWidget);
     expect(find.widgetWithText(TextFormField, 'Joana Silva'), findsOneWidget);
   });
 

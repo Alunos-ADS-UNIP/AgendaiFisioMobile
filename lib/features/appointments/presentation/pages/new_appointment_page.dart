@@ -1,10 +1,12 @@
 import 'package:flutter/material.dart';
 
 import '../../../../core/widgets/time_slot_picker_sheet.dart';
+import '../../../../core/utils/input_masks.dart';
 import '../../../../core/theme/app_spacing.dart';
 import '../../../../core/widgets/app_primary_button.dart';
 import '../../../../core/widgets/app_secondary_button.dart';
 import '../../../../core/widgets/app_text_field.dart';
+import '../../../../core/widgets/empty_state.dart';
 import '../../../../core/widgets/error_state.dart';
 import '../../../../core/widgets/professional_card.dart';
 import '../../domain/appointment.dart';
@@ -14,6 +16,11 @@ import '../../domain/professional.dart';
 import '../../domain/specialty.dart';
 import '../widgets/appointment_specialty_picker_sheet.dart';
 import 'appointment_created_page.dart';
+import 'professional_info_page.dart';
+
+/// Resultado de [NewAppointmentPage] quando o paciente escolhe completar o
+/// cadastro antes de agendar. A área do paciente então abre a aba Perfil.
+const completeProfileResult = 'completar-perfil';
 
 class NewAppointmentPage extends StatefulWidget {
   const NewAppointmentPage({
@@ -38,6 +45,7 @@ class _NewAppointmentPageState extends State<NewAppointmentPage> {
   DateTime? _day;
   TimeOfDay? _time;
   bool _loading = true;
+  List<String> _missingProfileFields = const [];
   bool _loadingProfessionals = false;
   bool _submitting = false;
   int _step = 0;
@@ -55,7 +63,54 @@ class _NewAppointmentPageState extends State<NewAppointmentPage> {
     super.dispose();
   }
 
+  /// Abre o perfil do profissional. Se o paciente seguir com o agendamento,
+  /// o profissional é escolhido e a etapa avança.
+  Future<void> _openProfessionalInfo(Professional item) async {
+    final follow = await Navigator.of(context).push<bool>(
+      MaterialPageRoute(
+        builder: (_) => ProfessionalInfoPage(
+          repository: widget.repository,
+          professional: item,
+          specialtyName: item.specialtyName.isEmpty
+              ? (_specialty?.name ?? '')
+              : item.specialtyName,
+        ),
+      ),
+    );
+    if (follow != true || !mounted) return;
+    setState(() {
+      _professional = item;
+      _error = null;
+    });
+    await _continue();
+  }
+
   Future<void> _loadInitialData() async {
+    // Paciente sem cadastro completo não agenda: a tela só explica o que falta.
+    final repository = widget.repository;
+    final checker = repository is PatientProfileChecker
+        ? repository as PatientProfileChecker
+        : null;
+    if (checker != null) {
+      try {
+        final missing = await checker.missingPatientProfileFields();
+        if (!mounted) return;
+        if (missing.isNotEmpty) {
+          setState(() {
+            _missingProfileFields = missing;
+            _loading = false;
+          });
+          return;
+        }
+      } on AppointmentException catch (error) {
+        if (!mounted) return;
+        setState(() {
+          _error = error.userMessage;
+          _loading = false;
+        });
+        return;
+      }
+    }
     try {
       final specialties = await widget.repository.fetchSpecialties();
       Professional? professional;
@@ -260,6 +315,15 @@ class _NewAppointmentPageState extends State<NewAppointmentPage> {
     ),
     body: _loading
         ? const Center(child: CircularProgressIndicator())
+        : _missingProfileFields.isNotEmpty
+        ? EmptyState(
+            title: 'Complete seu perfil',
+            message:
+                'Para agendar, falta preencher: ${_missingProfileFields.join(', ')}.',
+            icon: Icons.person_outline,
+            actionLabel: 'Completar perfil',
+            onAction: () => Navigator.pop(context, completeProfileResult),
+          )
         : _error != null && _specialties.isEmpty
         ? ErrorState(message: _error!, onRetry: _loadInitialData)
         : SafeArea(
@@ -370,6 +434,7 @@ class _NewAppointmentPageState extends State<NewAppointmentPage> {
                   : item.specialtyName,
               crefito: item.crefito,
               isActive: item.isActive,
+              onInfo: () => _openProfessionalInfo(item),
               onTap: () => setState(() {
                 _professional = item;
                 _error = null;
@@ -392,7 +457,7 @@ class _NewAppointmentPageState extends State<NewAppointmentPage> {
       ListTile(
         leading: const Icon(Icons.person_outline),
         title: Text(_professional?.name ?? 'Profissional'),
-        subtitle: Text(_professional?.crefito ?? ''),
+        subtitle: Text(InputMasks.displayCrefito(_professional?.crefito ?? '')),
       ),
       AppSecondaryButton(
         onPressed: _selectDay,

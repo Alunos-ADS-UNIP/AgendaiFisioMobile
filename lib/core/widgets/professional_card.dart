@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../theme/app_colors.dart';
 import '../theme/app_radius.dart';
 import '../theme/app_spacing.dart';
+import '../utils/input_masks.dart';
 
 class ProfessionalCard extends StatelessWidget {
   const ProfessionalCard({
@@ -12,6 +13,7 @@ class ProfessionalCard extends StatelessWidget {
     required this.isActive,
     this.isSelected = false,
     this.onTap,
+    this.onInfo,
     super.key,
   });
 
@@ -21,6 +23,9 @@ class ProfessionalCard extends StatelessWidget {
   final bool isActive;
   final bool isSelected;
   final VoidCallback? onTap;
+
+  /// Abre os detalhes do profissional, sem selecioná-lo.
+  final VoidCallback? onInfo;
 
   @override
   Widget build(BuildContext context) => Semantics(
@@ -65,7 +70,7 @@ class ProfessionalCard extends StatelessWidget {
                           ?.copyWith(color: AppColors.textSecondary),
                     ),
                     Text(
-                      crefito,
+                      InputMasks.displayCrefito(crefito),
                       style: Theme.of(context).textTheme.bodyMedium
                           ?.copyWith(color: AppColors.textSecondary),
                     ),
@@ -111,6 +116,15 @@ class ProfessionalCard extends StatelessWidget {
                         ),
                       ),
                     ),
+                    if (onInfo != null)
+                      Align(
+                        alignment: Alignment.centerLeft,
+                        child: TextButton.icon(
+                          onPressed: onInfo,
+                          icon: const Icon(Icons.person_search_outlined),
+                          label: const Text('Perfil do profissional'),
+                        ),
+                      ),
                   ],
                 ),
               ),

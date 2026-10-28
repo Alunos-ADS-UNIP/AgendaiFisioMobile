@@ -184,7 +184,6 @@ class _AgendaiFisioAppState extends State<AgendaiFisioApp> {
         key: ValueKey(user.userId),
         api: _professionalProfileApi!,
         repository: _appointmentRepository!,
-        professionalName: user.email.split('@').first,
         onLogout: () => unawaited(session.logout()),
       );
     }
@@ -294,14 +293,12 @@ class _ProfessionalHome extends StatefulWidget {
   const _ProfessionalHome({
     required this.api,
     required this.repository,
-    required this.professionalName,
     required this.onLogout,
     super.key,
   });
 
   final ProfessionalProfileApi api;
   final AppointmentRepository repository;
-  final String professionalName;
   final VoidCallback onLogout;
 
   @override
@@ -397,7 +394,7 @@ class _ProfessionalHomeState extends State<_ProfessionalHome> {
             ),
           _ => const UnavailableAvailabilityRepository(),
         },
-        professionalName: widget.professionalName,
+        professionalName: profile.name,
         profileBuilder: (_) => ProfessionalProfilePage(
           controller: _controller,
           onLogout: widget.onLogout,

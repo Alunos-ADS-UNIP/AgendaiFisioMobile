@@ -67,6 +67,42 @@ abstract final class InputMasks {
 
   static MaskedInputFormatter cepFormatter() => MaskedInputFormatter(cep);
 
+  /// CREFITO no formato convencional: número de 3 a 6 dígitos, hífen e a letra
+  /// da região (ex.: 12345-F). O formatador aceita o que for digitado e monta o
+  /// padrão: até 6 dígitos e, depois deles, a letra da região.
+  static TextInputFormatter crefitoFormatter() =>
+      TextInputFormatter.withFunction((oldValue, newValue) {
+        final formatted = formatCrefito(newValue.text);
+        return TextEditingValue(
+          text: formatted,
+          selection: TextSelection.collapsed(offset: formatted.length),
+        );
+      });
+
+  static final _crefitoPattern = RegExp(r'^\d{3,6}-[A-Z]$');
+  static final _crefitoLoosePattern = RegExp(r'^(\d{3,6})\s*-?\s*([A-Za-z])$');
+
+  static bool isCrefito(String value) =>
+      _crefitoPattern.hasMatch(value.trim().toUpperCase());
+
+  static String formatCrefito(String value) {
+    final upper = value.toUpperCase();
+    final allDigits = digitsOnly(upper);
+    final number = allDigits.length > 6 ? allDigits.substring(0, 6) : allDigits;
+    final letter = RegExp('[A-Z]').stringMatch(upper);
+    if (number.isEmpty) return '';
+    return letter == null ? number : '$number-$letter';
+  }
+
+  /// Mostra um CREFITO já salvo: no padrão quando for reconhecível (ex.:
+  /// "12345F" vira "12345-F"); valores antigos e fora do padrão ficam como estão.
+  static String displayCrefito(String raw) {
+    final trimmed = raw.trim();
+    final match = _crefitoLoosePattern.firstMatch(trimmed);
+    if (match == null) return trimmed;
+    return '${match.group(1)}-${match.group(2)!.toUpperCase()}';
+  }
+
   /// Formata uma string já só com dígitos (como a que vem da API) para
   /// exibição com máscara. Usado para preencher os campos ao abrir a tela
   /// de edição com dados existentes.

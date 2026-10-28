@@ -60,7 +60,7 @@ void main() {
 
       expect(find.text('Detalhes'), findsOneWidget);
       expect(find.text('Observações'), findsNothing);
-      expect(find.text('CREFITO'), findsNothing);
+      expect(find.text('CREFITO'), findsOneWidget);
     },
   );
 

@@ -49,7 +49,11 @@ class _TimeSlotPickerSheetState extends State<TimeSlotPickerSheet> {
   }
 
   List<int> get _slots => [
-    for (var m = widget.startHour * 60; m <= widget.endHour * 60; m += _stepMinutes)
+    for (
+      var m = widget.startHour * 60;
+      m <= widget.endHour * 60;
+      m += _stepMinutes
+    )
       m,
   ];
 
@@ -70,7 +74,9 @@ class _TimeSlotPickerSheetState extends State<TimeSlotPickerSheet> {
             const SizedBox(height: AppSpacing.xs),
             Text(
               'Selecionado: ${_label(_selected)}',
-              style: textTheme.titleMedium?.copyWith(color: AppColors.primaryDark),
+              style: textTheme.titleMedium?.copyWith(
+                color: AppColors.primaryDark,
+              ),
             ),
             const SizedBox(height: AppSpacing.md),
             ConstrainedBox(

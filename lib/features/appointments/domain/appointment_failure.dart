@@ -4,6 +4,7 @@ enum AppointmentFailure {
   notFound,
   conflict,
   invalid,
+  incompleteProfile,
   unexpected,
 }
 
@@ -25,6 +26,7 @@ class AppointmentException implements Exception {
           'Esse horário acabou de ser reservado. Escolha outro horário.',
         AppointmentFailure.invalid =>
           'Confira os dados do agendamento e tente novamente.',
+        AppointmentFailure.incompleteProfile => 'Complete seu cadastro (nome, CPF, data de nascimento, telefone e endereço) antes de agendar.',
         AppointmentFailure.unexpected =>
           'Não foi possível concluir a solicitação. Tente novamente.',
       };

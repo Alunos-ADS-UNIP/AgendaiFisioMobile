@@ -60,7 +60,7 @@ class _AppointmentsPageState extends State<AppointmentsPage> {
         IconButton(
           tooltip: 'Filtrar agenda',
           onPressed: _openFilters,
-          icon: const Icon(Icons.tune),
+          icon: const Icon(Icons.filter_alt_outlined),
         ),
       ],
     ),
@@ -166,13 +166,14 @@ class _AppointmentsPageState extends State<AppointmentsPage> {
       builder: (_) => AppointmentFiltersSheet(
         repository: widget.repository,
         initialFilters: _controller.filters,
+        professionalView: widget.professionalView,
       ),
     );
     if (result != null) await _controller.load(filters: result);
   }
 
   Future<void> _newAppointment() async {
-    final created = await Navigator.of(context).push<bool>(
+    final created = await Navigator.of(context).push<Object?>(
       MaterialPageRoute(
         builder: (_) => NewAppointmentPage(repository: widget.repository),
       ),
@@ -186,6 +187,7 @@ class _AppointmentsPageState extends State<AppointmentsPage> {
         builder: (_) => AppointmentDetailsPage(
           repository: widget.repository,
           appointmentId: item.id,
+          professionalView: widget.professionalView,
         ),
       ),
     );
@@ -206,6 +208,8 @@ class _AppointmentsPageState extends State<AppointmentsPage> {
     AppointmentFailure.conflict =>
       'Esse horário acabou de ser reservado. Escolha outro.',
     AppointmentFailure.invalid => 'Confira os dados e tente novamente.',
+    AppointmentFailure.incompleteProfile =>
+      'Complete seu cadastro antes de agendar.',
     AppointmentFailure.unexpected =>
       'Não foi possível carregar a agenda. Tente novamente.',
   };

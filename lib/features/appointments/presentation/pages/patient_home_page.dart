@@ -144,7 +144,7 @@ class _PatientHomePageState extends State<PatientHomePage> {
   }
 
   Future<void> _newAppointment() async {
-    final created = await Navigator.of(context).push<bool>(
+    final created = await Navigator.of(context).push<Object?>(
       MaterialPageRoute(
         builder: (_) => NewAppointmentPage(repository: widget.repository),
       ),

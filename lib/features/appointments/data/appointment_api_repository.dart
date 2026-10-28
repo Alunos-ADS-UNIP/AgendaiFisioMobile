@@ -22,7 +22,11 @@ typedef SessionExpiredCallback = Future<void> Function();
 /// Também implementa [ScheduleBlockGateway]: os agendamentos "Bloqueado" que o
 /// profissional cria para guardar a grade nunca aparecem em [fetchAppointments].
 class AppointmentApiRepository
-    implements AppointmentRepository, ScheduleBlockGateway {
+    implements
+        AppointmentRepository,
+        ScheduleBlockGateway,
+        PatientProfileChecker,
+        ProfessionalContactDirectory {
   AppointmentApiRepository({
     required Uri baseUri,
     required this._tokenProvider,
@@ -153,17 +157,13 @@ class AppointmentApiRepository
         final professional = await fetchProfessional(
           appointment.professionalId,
         );
-        appointment = Appointment(
-          id: appointment.id,
-          professionalId: appointment.professionalId,
+        appointment = appointment.copyWith(
           professionalName: appointment.professionalName.isEmpty
               ? professional.name
               : appointment.professionalName,
-          dateTime: appointment.dateTime,
-          status: appointment.status,
           specialtyName: professional.specialtyName,
-          observations: appointment.observations,
         );
+        appointment = await _withContacts(appointment);
       } on AppointmentException catch (error) {
         if (error.failure == AppointmentFailure.unauthorized) rethrow;
       }
@@ -269,6 +269,50 @@ class AppointmentApiRepository
     // 404/409: o bloqueio já não existe ou já foi cancelado.
     if (response.statusCode == 404 || response.statusCode == 409) return;
     if (response.statusCode != 200) _throwForStatus(response.statusCode);
+  }
+
+  @override
+  Future<String> fetchProfessionalEmail(String professionalId) async {
+    final contact = await _professionalContact(professionalId);
+    return contact?.info.email ?? '';
+  }
+
+  @override
+  Future<List<String>> missingPatientProfileFields() async {
+    final response = await _send(
+      'GET',
+      '/api/paciente/me',
+      authenticated: true,
+    );
+    if (response.statusCode != 200) _throwForStatus(response.statusCode);
+    try {
+      final json = _readMap(jsonDecode(response.body));
+      final endereco = _value(json, const ['endereco']);
+      final address = endereco is Map
+          ? _readMap(endereco)
+          : <String, dynamic>{};
+      final nome = _string(json, const ['nomeCompleto']).trim();
+      final cpf = _string(json, const ['cpf']).replaceAll(RegExp(r'\D'), '');
+      final nascimento = DateTime.tryParse(
+        _string(json, const ['dataNascimento']),
+      );
+      bool filled(Map<String, dynamic> map, String key) =>
+          _string(map, [key]).trim().isNotEmpty;
+      return [
+        if (nome.isEmpty || nome == 'Cadastro Pendente') 'nome completo',
+        if (cpf.length != 11) 'CPF',
+        if ((nascimento?.year ?? 0) <= 1900) 'data de nascimento',
+        if (!filled(json, 'telefone')) 'telefone',
+        if (!filled(address, 'rua')) 'rua',
+        if (!filled(address, 'numero')) 'número',
+        if (!filled(address, 'cep')) 'CEP',
+        if (!filled(address, 'bairro')) 'bairro',
+        if (!filled(address, 'cidade')) 'cidade',
+        if (!filled(address, 'estado')) 'estado',
+      ];
+    } catch (_) {
+      throw const AppointmentException(AppointmentFailure.unexpected);
+    }
   }
 
   static bool _isBlock(Map<String, dynamic> json) =>
@@ -398,6 +442,7 @@ class AppointmentApiRepository
       specialtyName: _string(json, const ['especialidadeNome']),
       observations: _nullableString(json, const ['observacoes']),
       patientName: _string(json, const ['pacienteNome']),
+      patientId: _string(json, const ['pacienteId']),
     );
   }
 
@@ -449,6 +494,62 @@ class AppointmentApiRepository
 
   static String _string(Map<String, dynamic> map, List<String> keys) =>
       _value(map, keys)?.toString() ?? '';
+
+  static DateTime? _dateOrNull(Map<String, dynamic> map, List<String> keys) {
+    final raw = _string(map, keys);
+    return raw.isEmpty ? null : DateTime.tryParse(raw);
+  }
+
+  /// Completa o detalhe com os contatos das rotas já existentes. Cada rota só
+  /// responde ao perfil certo: o paciente não lê /api/paciente/{id} e o
+  /// profissional lê o cadastro público do fisioterapeuta. Quem não tem acesso
+  /// a uma das rotas simplesmente não recebe aquela parte.
+  Future<Appointment> _withContacts(Appointment appointment) async {
+    final patient = await _patientContact(appointment.patientId);
+    final professional = await _professionalContact(appointment.professionalId);
+    return appointment.copyWith(
+      patientInfo: patient ?? appointment.patientInfo,
+      professionalInfo: professional?.info ?? appointment.professionalInfo,
+      professionalCrefito: professional?.crefito,
+      professionalBio: professional?.bio,
+    );
+  }
+
+  Future<ContactInfo?> _patientContact(String patientId) async {
+    if (patientId.isEmpty) return null;
+    final response = await _send(
+      'GET',
+      '/api/paciente/${Uri.encodeComponent(patientId)}',
+      authenticated: true,
+    );
+    if (response.statusCode != 200) return null;
+    final json = _readMap(jsonDecode(response.body));
+    final endereco = _value(json, const ['endereco']);
+    final address = endereco is Map ? _readMap(endereco) : <String, dynamic>{};
+    return ContactInfo(
+      email: _string(json, const ['email']),
+      cidade: _string(address, const ['cidade']),
+      estado: _string(address, const ['estado']),
+      dataNascimento: _dateOrNull(json, const ['dataNascimento']),
+    );
+  }
+
+  Future<({ContactInfo info, String crefito, String bio})?>
+  _professionalContact(String professionalId) async {
+    if (professionalId.isEmpty) return null;
+    final response = await _send(
+      'GET',
+      '/api/profissional/${Uri.encodeComponent(professionalId)}',
+      authenticated: true,
+    );
+    if (response.statusCode != 200) return null;
+    final json = _readMap(jsonDecode(response.body));
+    return (
+      info: ContactInfo(email: _string(json, const ['email'])),
+      crefito: _string(json, const ['crefito']),
+      bio: _string(json, const ['bio']),
+    );
+  }
 
   static String? _nullableString(Map<String, dynamic> map, List<String> keys) {
     final value = _value(map, keys);
@@ -519,7 +620,9 @@ class AppointmentApiRepository
       401 => AppointmentFailure.unauthorized,
       404 => AppointmentFailure.notFound,
       409 => AppointmentFailure.conflict,
-      400 || 422 => AppointmentFailure.invalid,
+      400 => AppointmentFailure.invalid,
+      // 422: o paciente ainda não preencheu os dados obrigatórios do cadastro.
+      422 => AppointmentFailure.incompleteProfile,
       _ => AppointmentFailure.unexpected,
     });
   }
