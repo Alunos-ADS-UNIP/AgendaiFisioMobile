@@ -112,7 +112,7 @@ void main() {
         await tester.tap(find.text('Selecionar horário'));
         await tester.pumpAndSettle();
         _noOverflow(tester);
-        await tester.tap(find.text('OK'));
+        await tester.tap(find.text('Confirmar'));
         await tester.pumpAndSettle();
         await tester.enterText(
           find.byType(TextFormField),

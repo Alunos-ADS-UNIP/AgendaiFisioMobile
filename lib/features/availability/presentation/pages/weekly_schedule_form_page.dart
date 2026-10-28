@@ -5,6 +5,7 @@ import '../../../../core/theme/app_radius.dart';
 import '../../../../core/theme/app_spacing.dart';
 import '../../../../core/widgets/app_primary_button.dart';
 import '../../../../core/widgets/app_secondary_button.dart';
+import '../../../../core/widgets/time_slot_picker_sheet.dart';
 import '../../domain/availability_failure.dart';
 import '../../domain/availability_models.dart';
 import '../../domain/availability_repository.dart';
@@ -53,13 +54,9 @@ class _WeeklyScheduleFormPageState extends State<WeeklyScheduleFormPage> {
   }
 
   Future<TimeOfDayValue?> _pickTime(TimeOfDayValue initial) async {
-    final picked = await showTimePicker(
-      context: context,
-      initialTime: TimeOfDay(hour: initial.hour, minute: initial.minute),
-      builder: (context, child) => MediaQuery(
-        data: MediaQuery.of(context).copyWith(alwaysUse24HourFormat: true),
-        child: child!,
-      ),
+    final picked = await TimeSlotPickerSheet.show(
+      context,
+      initial: TimeOfDay(hour: initial.hour, minute: initial.minute),
     );
     return picked == null ? null : TimeOfDayValue(picked.hour, picked.minute);
   }

@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../../../../core/widgets/time_slot_picker_sheet.dart';
 import '../../../../core/theme/app_spacing.dart';
 import '../../../../core/widgets/app_primary_button.dart';
 import '../../../../core/widgets/app_secondary_button.dart';
@@ -153,10 +154,10 @@ class _NewAppointmentPageState extends State<NewAppointmentPage> {
   }
 
   Future<void> _selectTime() async {
-    final picked = await showTimePicker(
-      context: context,
-      initialTime: _time ?? const TimeOfDay(hour: 9, minute: 0),
-      helpText: 'Escolha o horário',
+    final picked = await TimeSlotPickerSheet.show(
+      context,
+      initial: _time ?? const TimeOfDay(hour: 9, minute: 0),
+      title: 'Escolha o horário',
     );
     if (picked != null && mounted) {
       setState(() {

@@ -4,6 +4,7 @@ import 'dart:convert';
 import 'package:http/http.dart' as http;
 
 import '../../../core/models/appointment_status.dart';
+import '../../availability/data/appointment_block_availability_repository.dart';
 import '../domain/appointment.dart';
 import '../domain/appointment_failure.dart';
 import '../domain/appointment_filters.dart';
@@ -17,7 +18,11 @@ typedef SessionExpiredCallback = Future<void> Function();
 /// Repositório HTTP da agenda. O token só é anexado a chamadas da mesma origem
 /// configurada; especialidades são públicas e profissionais exigem autenticação.
 /// Redirecionamentos não recebem o token.
-class AppointmentApiRepository implements AppointmentRepository {
+///
+/// Também implementa [ScheduleBlockGateway]: os agendamentos "Bloqueado" que o
+/// profissional cria para guardar a grade nunca aparecem em [fetchAppointments].
+class AppointmentApiRepository
+    implements AppointmentRepository, ScheduleBlockGateway {
   AppointmentApiRepository({
     required Uri baseUri,
     required this._tokenProvider,
@@ -33,6 +38,8 @@ class AppointmentApiRepository implements AppointmentRepository {
   final http.Client _client;
   final bool _ownsClient;
   final Map<String, Professional> _professionals = {};
+
+  static const _blockedStatus = 'Bloqueado';
 
   void dispose() {
     if (_ownsClient) _client.close();
@@ -120,7 +127,10 @@ class AppointmentApiRepository implements AppointmentRepository {
     if (response.statusCode != 200) _throwForStatus(response.statusCode);
     try {
       final rows = _readList(jsonDecode(response.body));
-      final appointments = rows.map(_appointmentFromJson).toList();
+      final appointments = rows
+          .where((row) => !_isBlock(row))
+          .map(_appointmentFromJson)
+          .toList();
       final filtered = filters.apply(appointments);
       return filtered..sort((a, b) => a.dateTime.compareTo(b.dateTime));
     } catch (_) {
@@ -198,6 +208,72 @@ class AppointmentApiRepository implements AppointmentRepository {
       throw const AppointmentException(AppointmentFailure.unexpected);
     }
   }
+
+  @override
+  Future<List<ScheduleBlock>> fetchScheduleBlocks(String professionalId) async {
+    final response = await _send(
+      'GET',
+      '/api/agendamento',
+      query: {'profissionalId': professionalId, 'status': _blockedStatus},
+      authenticated: true,
+    );
+    if (response.statusCode != 200) _throwForStatus(response.statusCode);
+    try {
+      return _readList(jsonDecode(response.body))
+          .where(_isBlock)
+          .map((json) {
+            final id = _string(json, const ['id', 'agendamentoId']);
+            final date = DateTime.tryParse(
+              _string(json, const ['dataHora', 'dateTime']),
+            );
+            if (id.isEmpty || date == null) {
+              throw const FormatException('Bloqueio inválido.');
+            }
+            return ScheduleBlock(id: id, dateTime: date.toLocal());
+          })
+          .toList(growable: false);
+    } catch (_) {
+      throw const AppointmentException(AppointmentFailure.unexpected);
+    }
+  }
+
+  @override
+  Future<void> createScheduleBlock({
+    required String professionalId,
+    required DateTime dateTime,
+  }) async {
+    final response = await _send(
+      'POST',
+      '/api/agendamento',
+      body: {
+        'profissionalId': professionalId,
+        'dataHora': dateTime.toUtc().toIso8601String(),
+        'observacoes': 'Fora da grade de atendimento',
+      },
+      authenticated: true,
+    );
+    // 409: o horário já está ocupado (por um paciente ou outro bloqueio).
+    if (response.statusCode == 409) return;
+    if (response.statusCode != 200 && response.statusCode != 201) {
+      _throwForStatus(response.statusCode);
+    }
+  }
+
+  @override
+  Future<void> cancelScheduleBlock(String id) async {
+    final response = await _send(
+      'PATCH',
+      '/api/agendamento/${Uri.encodeComponent(id)}/cancelar',
+      authenticated: true,
+    );
+    // 404/409: o bloqueio já não existe ou já foi cancelado.
+    if (response.statusCode == 404 || response.statusCode == 409) return;
+    if (response.statusCode != 200) _throwForStatus(response.statusCode);
+  }
+
+  static bool _isBlock(Map<String, dynamic> json) =>
+      _string(json, const ['status']).toLowerCase() ==
+      _blockedStatus.toLowerCase();
 
   @override
   Future<List<Professional>> fetchProfessionals({

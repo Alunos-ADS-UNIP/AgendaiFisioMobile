@@ -14,6 +14,7 @@ import '../features/appointments/data/appointment_api_repository.dart';
 import '../features/appointments/domain/appointment_repository.dart';
 import '../features/appointments/presentation/pages/patient_area_page.dart';
 import '../features/auth/data/auth_api.dart';
+import '../features/availability/data/appointment_block_availability_repository.dart';
 import '../features/availability/domain/availability_repository.dart';
 import '../features/availability/presentation/pages/professional_area_page.dart';
 import '../features/auth/data/session_storage.dart';
@@ -386,9 +387,16 @@ class _ProfessionalHomeState extends State<_ProfessionalHome> {
       }
       return ProfessionalAreaPage(
         repository: widget.repository,
-        // Sem rotas de grade no backend ainda: a aba mostra "indisponível".
-        // Trocar pelo repositório HTTP quando houver contrato.
-        availabilityRepository: const UnavailableAvailabilityRepository(),
+        // Sem rota de grade no backend: a grade é guardada como agendamentos
+        // "Bloqueado" nos horários fora dos turnos.
+        availabilityRepository: switch (widget.repository) {
+          final ScheduleBlockGateway gateway =>
+            AppointmentBlockAvailabilityRepository(
+              gateway: gateway,
+              professionalId: profile.id,
+            ),
+          _ => const UnavailableAvailabilityRepository(),
+        },
         professionalName: widget.professionalName,
         profileBuilder: (_) => ProfessionalProfilePage(
           controller: _controller,
