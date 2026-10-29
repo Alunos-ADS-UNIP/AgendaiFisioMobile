@@ -1,10 +1,12 @@
 import 'package:flutter/material.dart';
 
 import '../../../../core/theme/app_spacing.dart';
+import '../../../../core/theme/app_radius.dart';
 import '../../../../core/widgets/app_feedback.dart';
-import '../../../../core/widgets/app_primary_button.dart';
+import '../../../../core/widgets/error_state.dart';
 import '../../domain/entities/specialty.dart';
 import '../controllers/specialty_controller.dart';
+import '../widgets/specialty_primary_button.dart';
 import '../widgets/specialty_picker_sheet.dart';
 
 class ProfessionalSpecialtyPage extends StatefulWidget {
@@ -59,6 +61,9 @@ class _ProfessionalSpecialtyPageState extends State<ProfessionalSpecialtyPage> {
               ),
               const SizedBox(height: AppSpacing.lg),
               Card(
+                shape: const RoundedRectangleBorder(
+                  borderRadius: AppRadius.large,
+                ),
                 child: ListTile(
                   contentPadding: const EdgeInsets.all(AppSpacing.md),
                   title: Text(selected?.name ?? 'Nenhuma selecionada'),
@@ -69,14 +74,24 @@ class _ProfessionalSpecialtyPageState extends State<ProfessionalSpecialtyPage> {
               ),
               const SizedBox(height: AppSpacing.lg),
               if (state.status == SpecialtyCatalogStatus.loading)
-                const Center(child: CircularProgressIndicator())
+                Semantics(
+                  label: 'Carregando especialidades',
+                  liveRegion: true,
+                  child: Center(child: CircularProgressIndicator()),
+                )
               else if (state.status == SpecialtyCatalogStatus.empty)
                 const Text('O catálogo ainda não possui especialidades.')
               else if (state.status == SpecialtyCatalogStatus.error ||
                   state.status == SpecialtyCatalogStatus.offline)
-                Text(
-                  state.errorMessage ?? 'Não foi possível carregar o catálogo.',
-                  style: TextStyle(color: Theme.of(context).colorScheme.error),
+                SizedBox(
+                  width: double.infinity,
+                  child: ErrorState(
+                    title: state.status == SpecialtyCatalogStatus.offline
+                        ? 'Sem conexão'
+                        : 'Não foi possível carregar',
+                    message: state.errorMessage ?? 'Tente novamente.',
+                    onRetry: widget.catalogController.load,
+                  ),
                 ),
               if (widget.professionalController.errorMessage != null) ...[
                 const SizedBox(height: AppSpacing.md),
@@ -86,7 +101,7 @@ class _ProfessionalSpecialtyPageState extends State<ProfessionalSpecialtyPage> {
                 ),
               ],
               const SizedBox(height: AppSpacing.lg),
-              AppPrimaryButton(
+              SpecialtyPrimaryButton(
                 label: 'Salvar especialidade',
                 icon: Icons.save_outlined,
                 isLoading: widget.professionalController.isSaving,
@@ -128,6 +143,7 @@ class _ProfessionalSpecialtyPageState extends State<ProfessionalSpecialtyPage> {
       setState(() => _pendingSelection = null);
       AppFeedback.showSuccess(context, 'Especialidade atualizada com sucesso.');
     } else {
+      setState(() => _pendingSelection = null);
       AppFeedback.showError(
         context,
         widget.professionalController.errorMessage ??

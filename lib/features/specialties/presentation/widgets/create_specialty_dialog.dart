@@ -1,10 +1,12 @@
 import 'package:flutter/material.dart';
 
 import '../../../../core/theme/app_spacing.dart';
-import '../../../../core/widgets/app_primary_button.dart';
+import '../../../../core/theme/app_radius.dart';
 import '../../../../core/widgets/app_text_field.dart';
 import '../../domain/entities/specialty.dart';
+import '../../domain/specialty_name_normalizer.dart';
 import '../controllers/specialty_controller.dart';
+import 'specialty_primary_button.dart';
 
 class CreateSpecialtyDialog extends StatefulWidget {
   const CreateSpecialtyDialog({
@@ -47,11 +49,13 @@ class _CreateSpecialtyDialogState extends State<CreateSpecialtyDialog> {
   @override
   Widget build(BuildContext context) {
     return AlertDialog(
+      shape: const RoundedRectangleBorder(borderRadius: AppRadius.large),
       title: const Text('Nova especialidade'),
+      actionsOverflowDirection: VerticalDirection.down,
       content: Form(
         key: _formKey,
-        child: SizedBox(
-          width: 420,
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 420),
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
@@ -94,7 +98,7 @@ class _CreateSpecialtyDialogState extends State<CreateSpecialtyDialog> {
         ),
         AnimatedBuilder(
           animation: widget.controller,
-          builder: (context, _) => AppPrimaryButton(
+          builder: (context, _) => SpecialtyPrimaryButton(
             label: 'Cadastrar',
             icon: Icons.add_rounded,
             isLoading: widget.controller.isSaving,
@@ -107,13 +111,13 @@ class _CreateSpecialtyDialogState extends State<CreateSpecialtyDialog> {
   }
 
   String? _validateName(String? value) {
-    final normalized = _normalize(value ?? '');
+    final normalized = normalizeSpecialtyName(value ?? '');
     if (normalized.isEmpty) return 'Informe o nome da especialidade.';
     if (normalized.length < 3 || normalized.length > 100) {
       return 'Use entre 3 e 100 caracteres.';
     }
     final duplicate = widget.existingItems.any(
-      (item) => _normalize(item.name).toLowerCase() == normalized.toLowerCase(),
+      (item) => normalizeSpecialtyName(item.name) == normalized,
     );
     if (duplicate) return 'Esta especialidade já está no catálogo.';
     return null;
@@ -122,12 +126,12 @@ class _CreateSpecialtyDialogState extends State<CreateSpecialtyDialog> {
   Future<void> _submit() async {
     if (!_formKey.currentState!.validate()) return;
     final created = await widget.controller.create(
-      _normalize(_nameController.text),
+      _displayName(_nameController.text),
     );
     if (!mounted || created == null) return;
     Navigator.of(context).pop(created);
   }
 
-  String _normalize(String value) =>
+  String _displayName(String value) =>
       value.trim().replaceAll(RegExp(r'\s+'), ' ');
 }

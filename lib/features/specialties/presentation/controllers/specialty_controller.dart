@@ -1,9 +1,9 @@
 import 'package:flutter/foundation.dart';
 
-import '../../data/specialty_api_repository.dart';
 import '../../domain/entities/specialty.dart';
 import '../../domain/repositories/specialty_repository.dart';
 import '../../domain/specialty_failure.dart';
+import '../../domain/specialty_name_normalizer.dart';
 
 enum SpecialtyCatalogStatus { initial, loading, loaded, empty, error, offline }
 

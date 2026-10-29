@@ -3,6 +3,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:agendaifisiomobile/features/specialties/data/specialty_api_client.dart';
 import 'package:agendaifisiomobile/features/specialties/data/specialty_api_repository.dart';
 import 'package:agendaifisiomobile/features/specialties/domain/specialty_failure.dart';
+import 'package:agendaifisiomobile/features/specialties/domain/specialty_name_normalizer.dart';
 
 class FakeSpecialtyHttpClient implements SpecialtyHttpClient {
   FakeSpecialtyHttpClient({
@@ -78,17 +79,18 @@ void main() {
     },
   );
 
-  test('consulta especialidade por ID com URL codificada', () async {
+  test('consulta especialidade por GUID', () async {
+    const specialtyId = '550e8400-e29b-41d4-a716-446655440000';
     final client = FakeSpecialtyHttpClient(
       getResponse: const SpecialtyHttpResponse(
         statusCode: 200,
-        body: {'id': 'abc/123', 'nome': 'Osteopatia'},
+        body: {'id': specialtyId, 'nome': 'Osteopatia'},
       ),
     );
 
-    final result = await SpecialtyApiRepository(client).getById('abc/123');
+    final result = await SpecialtyApiRepository(client).getById(specialtyId);
 
-    expect(client.lastPath, '/api/especialidade/abc%2F123');
+    expect(client.lastPath, '/api/especialidade/$specialtyId');
     expect(client.lastAuthenticated, isFalse);
     expect(result.name, 'Osteopatia');
   });
@@ -114,10 +116,13 @@ void main() {
       putResponse: const SpecialtyHttpResponse(statusCode: 200),
     );
 
-    await SpecialtyApiRepository(client).updateProfessionalSpecialty('abc');
+    await SpecialtyApiRepository(client)
+        .updateProfessionalSpecialty('550e8400-e29b-41d4-a716-446655440000');
 
     expect(client.lastPath, '/api/profissional/especialidade');
-    expect(client.lastBody, {'especialidadeId': 'abc'});
+    expect(client.lastBody, {
+      'especialidadeId': '550e8400-e29b-41d4-a716-446655440000',
+    });
     expect(client.lastAuthenticated, isTrue);
   });
 
@@ -136,7 +141,8 @@ void main() {
         );
 
         await expectLater(
-          SpecialtyApiRepository(client).getById('abc'),
+          SpecialtyApiRepository(client)
+              .getById('550e8400-e29b-41d4-a716-446655440000'),
           throwsA(
             isA<SpecialtyException>()
                 .having((error) => error.failure, 'failure', entry.value)
@@ -156,5 +162,10 @@ void main() {
       specialtyPathForBaseUrl('https://example.test', '/api/especialidade'),
       '/api/especialidade',
     );
+  });
+
+  test('normaliza caixa, espaços e acentos somente para comparação', () {
+    expect(normalizeSpecialtyName('  AQUÁTICA  '), 'aquatica');
+    expect(normalizeSpecialtyName('AQUATICA'), 'aquatica');
   });
 }

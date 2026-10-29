@@ -14,9 +14,11 @@ void main() {
   });
 
   test('serializa vínculo usando somente especialidadeId', () {
-    final json = const ProfessionalSpecialtyUpdateDto('guid').toJson();
+    final json = const ProfessionalSpecialtyUpdateDto(
+      '550e8400-e29b-41d4-a716-446655440000',
+    ).toJson();
 
-    expect(json, {'especialidadeId': 'guid'});
+    expect(json, {'especialidadeId': '550e8400-e29b-41d4-a716-446655440000'});
     expect(json.containsKey('profissionalId'), isFalse);
     expect(json.containsKey('usuarioId'), isFalse);
   });
