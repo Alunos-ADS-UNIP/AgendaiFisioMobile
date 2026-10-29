@@ -335,7 +335,12 @@ class _NewAppointmentPageState extends State<NewAppointmentPage> {
         ? ErrorState(message: _error!, onRetry: _loadInitialData)
         : SafeArea(
             child: ListView(
-              padding: const EdgeInsets.all(AppSpacing.md),
+              padding: const EdgeInsets.fromLTRB(
+                AppSpacing.md,
+                AppSpacing.md,
+                AppSpacing.md,
+                104,
+              ),
               children: [
                 Text(
                   'Etapa ${_step + 1} de 3',
@@ -359,25 +364,38 @@ class _NewAppointmentPageState extends State<NewAppointmentPage> {
                     ),
                   ),
                 ],
-                const SizedBox(height: AppSpacing.lg),
-                if (_step < 2)
-                  AppPrimaryButton(
-                    label: _step == 0
-                        ? 'Escolher especialidade'
-                        : 'Escolher data e horário',
-                    onPressed: _canContinue ? _continue : null,
-                  )
-                else
-                  AppPrimaryButton(
-                    label: 'Confirmar agendamento',
-                    icon: Icons.check,
-                    isLoading: _submitting,
-                    onPressed: _isDateTimeValid ? _submit : null,
-                  ),
               ],
             ),
           ),
+    floatingActionButtonLocation: FloatingActionButtonLocation.centerFloat,
+    floatingActionButton: _loading || (_error != null && _specialties.isEmpty)
+        ? null
+        : SizedBox(
+            width: MediaQuery.sizeOf(context).width - (AppSpacing.md * 2),
+            child: Material(
+              elevation: 6,
+              color: Colors.transparent,
+              borderRadius: const BorderRadius.all(Radius.circular(12)),
+              child: _actionButton(),
+            ),
+          ),
   );
+
+  Widget _actionButton() {
+    if (_step == 2) {
+      return AppPrimaryButton(
+        label: 'Confirmar agendamento',
+        icon: Icons.check,
+        isLoading: _submitting,
+        onPressed: _isDateTimeValid ? _submit : null,
+      );
+    }
+
+    return AppPrimaryButton(
+      label: _step == 0 ? 'Escolher especialidade' : 'Escolher data e horário',
+      onPressed: _canContinue ? _continue : null,
+    );
+  }
 
   bool get _canContinue =>
       _step == 0 ? _specialty != null : _professional != null;
