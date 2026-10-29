@@ -1,12 +1,13 @@
 import 'package:flutter/material.dart';
 
 import '../../../../core/theme/app_spacing.dart';
+import '../../../../core/theme/app_radius.dart';
 import '../../../../core/widgets/app_feedback.dart';
-import '../../../../core/widgets/app_primary_button.dart';
 import '../../../../core/widgets/empty_state.dart';
 import '../../domain/entities/specialty.dart';
 import '../controllers/specialty_controller.dart';
 import '../widgets/create_specialty_dialog.dart';
+import '../widgets/specialty_primary_button.dart';
 
 class ClinicSpecialtiesPage extends StatefulWidget {
   const ClinicSpecialtiesPage({
@@ -59,7 +60,11 @@ class _ClinicSpecialtiesPageState extends State<ClinicSpecialtiesPage> {
         builder: (context, _) {
           final state = widget.catalogController.state;
           if (state.status == SpecialtyCatalogStatus.loading) {
-            return const Center(child: CircularProgressIndicator());
+            return Semantics(
+              label: 'Carregando especialidades',
+              liveRegion: true,
+              child: Center(child: CircularProgressIndicator()),
+            );
           }
           if (state.status == SpecialtyCatalogStatus.empty) {
             return EmptyState(
@@ -77,13 +82,15 @@ class _ClinicSpecialtiesPageState extends State<ClinicSpecialtiesPage> {
                 child: Column(
                   mainAxisSize: MainAxisSize.min,
                   children: [
+                    const Icon(Icons.error_outline),
+                    const SizedBox(height: AppSpacing.sm),
                     Text(
                       state.errorMessage ??
                           'Não foi possível carregar o catálogo.',
                       textAlign: TextAlign.center,
                     ),
                     const SizedBox(height: AppSpacing.md),
-                    AppPrimaryButton(
+                    SpecialtyPrimaryButton(
                       label: 'Tentar novamente',
                       icon: Icons.refresh,
                       onPressed: widget.catalogController.load,
@@ -100,10 +107,13 @@ class _ClinicSpecialtiesPageState extends State<ClinicSpecialtiesPage> {
             separatorBuilder: (_, _) => const SizedBox(height: AppSpacing.sm),
             itemBuilder: (context, index) {
               if (index == 0) {
-                return AppPrimaryButton(
-                  label: 'Nova especialidade',
-                  icon: Icons.add,
-                  onPressed: _openCreateDialog,
+                return SizedBox(
+                  width: double.infinity,
+                  child: SpecialtyPrimaryButton(
+                    label: 'Nova especialidade',
+                    icon: Icons.add,
+                    onPressed: _openCreateDialog,
+                  ),
                 );
               }
               return _SpecialtyListTile(specialty: state.items[index - 1]);
@@ -143,12 +153,16 @@ class _SpecialtyListTile extends StatelessWidget {
   final Specialty specialty;
 
   @override
-  Widget build(BuildContext context) => Card(
-    child: ListTile(
-      minVerticalPadding: AppSpacing.sm,
-      leading: const Icon(Icons.medical_services_outlined),
-      title: Text(specialty.name),
-      subtitle: const Text('Disponível para vínculo profissional'),
+  Widget build(BuildContext context) => Semantics(
+    label: '${specialty.name}. Disponível para vínculo profissional.',
+    child: Card(
+      shape: const RoundedRectangleBorder(borderRadius: AppRadius.large),
+      child: ListTile(
+        minVerticalPadding: AppSpacing.sm,
+        leading: const Icon(Icons.medical_services_outlined),
+        title: Text(specialty.name),
+        subtitle: const Text('Disponível para vínculo profissional'),
+      ),
     ),
   );
 }

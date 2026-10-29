@@ -1,8 +1,10 @@
 import 'package:flutter/material.dart';
 
 import '../../../../core/theme/app_spacing.dart';
+import '../../../../core/theme/app_radius.dart';
 import '../../../../core/widgets/app_search_field.dart';
 import '../../domain/entities/specialty.dart';
+import '../../domain/specialty_name_normalizer.dart';
 
 class SpecialtyPickerSheet extends StatefulWidget {
   const SpecialtyPickerSheet({
@@ -26,6 +28,12 @@ class SpecialtyPickerSheet extends StatefulWidget {
       context: context,
       isScrollControlled: true,
       backgroundColor: Theme.of(context).colorScheme.surface,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.only(
+          topLeft: Radius.circular(16),
+          topRight: Radius.circular(16),
+        ),
+      ),
       builder: (_) => SpecialtyPickerSheet(
         items: items,
         initialSelection: initialSelection,
@@ -56,9 +64,9 @@ class _SpecialtyPickerSheetState extends State<SpecialtyPickerSheet> {
 
   @override
   Widget build(BuildContext context) {
-    final query = _searchController.text.trim().toLowerCase();
+    final query = normalizeSpecialtyName(_searchController.text);
     final filtered = widget.items
-        .where((item) => item.name.toLowerCase().contains(query))
+        .where((item) => normalizeSpecialtyName(item.name).contains(query))
         .toList(growable: false);
 
     return SafeArea(
@@ -94,20 +102,28 @@ class _SpecialtyPickerSheetState extends State<SpecialtyPickerSheet> {
                         itemBuilder: (context, index) {
                           final item = filtered[index];
                           final selected = _selected?.id == item.id;
-                          return Card(
-                            child: ListTile(
-                              minVerticalPadding: AppSpacing.xs,
-                              selected: selected,
-                              leading: Icon(
-                                selected
-                                    ? Icons.radio_button_checked
-                                    : Icons.radio_button_unchecked,
-                                color: selected
-                                    ? Theme.of(context).colorScheme.primary
-                                    : null,
+                          return Semantics(
+                            button: true,
+                            selected: selected,
+                            label: item.name,
+                            child: Card(
+                              shape: const RoundedRectangleBorder(
+                                borderRadius: AppRadius.large,
                               ),
-                              title: Text(item.name),
-                              onTap: () => Navigator.of(context).pop(item),
+                              child: ListTile(
+                                minVerticalPadding: AppSpacing.xs,
+                                selected: selected,
+                                leading: Icon(
+                                  selected
+                                      ? Icons.radio_button_checked
+                                      : Icons.radio_button_unchecked,
+                                  color: selected
+                                      ? Theme.of(context).colorScheme.primary
+                                      : null,
+                                ),
+                                title: Text(item.name),
+                                onTap: () => Navigator.of(context).pop(item),
+                              ),
                             ),
                           );
                         },

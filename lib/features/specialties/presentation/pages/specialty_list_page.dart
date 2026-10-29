@@ -1,12 +1,14 @@
 import 'package:flutter/material.dart';
 
 import '../../../../core/theme/app_spacing.dart';
+import '../../../../core/theme/app_radius.dart';
 import '../../../../core/widgets/app_loading_skeleton.dart';
 import '../../../../core/widgets/app_search_field.dart';
 import '../../../../core/widgets/empty_state.dart';
 import '../../../../core/widgets/error_state.dart';
 import '../../domain/entities/specialty.dart';
 import '../../domain/repositories/specialty_repository.dart';
+import '../../domain/specialty_name_normalizer.dart';
 import '../controllers/specialty_controller.dart';
 
 class SpecialtyListPage extends StatefulWidget {
@@ -57,9 +59,11 @@ class _SpecialtyListPageState extends State<SpecialtyListPage> {
         animation: widget.controller,
         builder: (context, _) {
           final state = widget.controller.state;
-          final query = _searchController.text.trim().toLowerCase();
+          final query = normalizeSpecialtyName(_searchController.text);
           final filtered = state.items
-              .where((item) => item.name.toLowerCase().contains(query))
+              .where(
+                (item) => normalizeSpecialtyName(item.name).contains(query),
+              )
               .toList(growable: false);
 
           return RefreshIndicator(
@@ -150,32 +154,8 @@ class _SpecialtyListPageState extends State<SpecialtyListPage> {
     if (repository == null) return;
     await showDialog<void>(
       context: context,
-      builder: (context) => AlertDialog(
-        title: Text(item.name),
-        content: FutureBuilder<Specialty>(
-          future: repository.getById(item.id),
-          builder: (context, snapshot) {
-            if (snapshot.connectionState != ConnectionState.done) {
-              return const SizedBox(
-                height: 48,
-                child: Center(child: CircularProgressIndicator()),
-              );
-            }
-            if (snapshot.hasError) {
-              return const Text(
-                'Não foi possível consultar esta especialidade.',
-              );
-            }
-            return Text('Especialidade disponível: ${snapshot.data!.name}');
-          },
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(context).pop(),
-            child: const Text('Fechar'),
-          ),
-        ],
-      ),
+      builder: (context) =>
+          _SpecialtyDetailsDialog(item: item, repository: repository),
     );
   }
 }
@@ -188,24 +168,111 @@ class _SpecialtyCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Card(
-      child: ListTile(
-        minVerticalPadding: AppSpacing.sm,
-        onTap: onTap,
-        leading: CircleAvatar(
-          backgroundColor: Theme.of(context).colorScheme.primaryContainer,
-          child: Icon(
-            Icons.medical_services_outlined,
-            color: Theme.of(context).colorScheme.primary,
+    return Semantics(
+      button: onTap != null,
+      label: onTap == null
+          ? specialty.name
+          : '${specialty.name}. Consultar detalhes.',
+      child: Card(
+        shape: const RoundedRectangleBorder(borderRadius: AppRadius.large),
+        child: ListTile(
+          minVerticalPadding: AppSpacing.sm,
+          onTap: onTap,
+          leading: CircleAvatar(
+            backgroundColor: Theme.of(context).colorScheme.primaryContainer,
+            child: Icon(
+              Icons.medical_services_outlined,
+              color: Theme.of(context).colorScheme.primary,
+            ),
+          ),
+          title: Text(specialty.name),
+          subtitle: Text(
+            onTap == null
+                ? 'Especialidade disponível no catálogo'
+                : 'Toque para consultar detalhes',
           ),
         ),
-        title: Text(specialty.name),
-        subtitle: Text(
-          onTap == null
-              ? 'Especialidade disponível no catálogo'
-              : 'Toque para consultar detalhes',
+      ),
+    );
+  }
+}
+
+class _SpecialtyDetailsDialog extends StatefulWidget {
+  const _SpecialtyDetailsDialog({required this.item, required this.repository});
+
+  final Specialty item;
+  final SpecialtyRepository repository;
+
+  @override
+  State<_SpecialtyDetailsDialog> createState() =>
+      _SpecialtyDetailsDialogState();
+}
+
+class _SpecialtyDetailsDialogState extends State<_SpecialtyDetailsDialog> {
+  late Future<Specialty> _details;
+
+  @override
+  void initState() {
+    super.initState();
+    _details = widget.repository.getById(widget.item.id);
+  }
+
+  void _retry() {
+    final details = widget.repository.getById(widget.item.id);
+    setState(() {
+      _details = details;
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AlertDialog(
+      shape: const RoundedRectangleBorder(borderRadius: AppRadius.large),
+      title: Text(widget.item.name),
+      content: SizedBox(
+        width: 360,
+        child: FutureBuilder<Specialty>(
+          future: _details,
+          builder: (context, snapshot) {
+            if (snapshot.connectionState != ConnectionState.done) {
+              return Semantics(
+                label: 'Carregando detalhes da especialidade',
+                liveRegion: true,
+                child: SizedBox(
+                  height: 48,
+                  child: Center(child: CircularProgressIndicator()),
+                ),
+              );
+            }
+            if (snapshot.hasError) {
+              return Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  const Icon(Icons.error_outline),
+                  const SizedBox(height: AppSpacing.sm),
+                  const Text(
+                    'Não foi possível consultar esta especialidade.',
+                    textAlign: TextAlign.center,
+                  ),
+                  const SizedBox(height: AppSpacing.sm),
+                  TextButton.icon(
+                    onPressed: _retry,
+                    icon: const Icon(Icons.refresh),
+                    label: const Text('Tentar novamente'),
+                  ),
+                ],
+              );
+            }
+            return Text('Especialidade disponível: ${snapshot.data!.name}');
+          },
         ),
       ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.of(context).pop(),
+          child: const Text('Fechar'),
+        ),
+      ],
     );
   }
 }
