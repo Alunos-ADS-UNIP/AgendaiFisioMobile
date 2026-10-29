@@ -46,9 +46,9 @@ class _WeeklyScheduleFormPageState extends State<WeeklyScheduleFormPage> {
   Future<void> _save() async {
     final saved = await _controller.save();
     if (saved && mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Grade de horários salva.')),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('Grade de horários salva.')));
       Navigator.of(context).pop(true);
     }
   }
@@ -88,8 +88,7 @@ class _WeeklyScheduleFormPageState extends State<WeeklyScheduleFormPage> {
   };
 
   static String _failureText(AvailabilityFailure failure) => switch (failure) {
-    AvailabilityFailure.unavailable =>
-      'Não foi possível salvar: esta função ainda não está disponível no sistema.',
+    AvailabilityFailure.unavailable => 'Não foi possível salvar: esta função ainda não está disponível no sistema.',
     AvailabilityFailure.network =>
       'Não foi possível salvar. Confira sua conexão e tente novamente.',
     AvailabilityFailure.unauthorized => 'Sua sessão expirou. Entre novamente.',
@@ -186,10 +185,11 @@ class _WeeklyScheduleFormPageState extends State<WeeklyScheduleFormPage> {
                 day.day.label,
                 style: Theme.of(context).textTheme.titleMedium,
               ),
-              subtitle: Text(day.enabled ? 'Atende neste dia' : 'Sem atendimento'),
+              subtitle: Text(
+                day.enabled ? 'Atende neste dia' : 'Sem atendimento',
+              ),
               value: day.enabled,
-              onChanged: (value) =>
-                  _controller.setDayEnabled(day.day, value),
+              onChanged: (value) => _controller.setDayEnabled(day.day, value),
             ),
             if (day.enabled) ...[
               for (var i = 0; i < day.shifts.length; i++)

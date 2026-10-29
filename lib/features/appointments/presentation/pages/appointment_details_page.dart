@@ -1,9 +1,10 @@
 import 'package:flutter/material.dart';
 
 import '../../../../core/theme/app_spacing.dart';
+import '../../../../core/utils/date_text.dart';
 import '../../../../core/utils/input_masks.dart';
 import '../../../../core/widgets/error_state.dart';
-import '../../../../core/widgets/status_chip.dart';
+import '../../../../core/widgets/info_card.dart';
 import '../../domain/appointment.dart';
 import '../../domain/appointment_repository.dart';
 
@@ -51,167 +52,172 @@ class _AppointmentDetailsPageState extends State<AppointmentDetailsPage> {
           );
         }
         final item = snapshot.data!;
-        final professionalView = widget.professionalView;
-        return ListView(
-          padding: const EdgeInsets.all(AppSpacing.md),
-          children: [
-            if (professionalView) ...[
-              Text(
-                item.patientName.isEmpty ? 'Paciente' : item.patientName,
-                style: Theme.of(context).textTheme.headlineSmall,
-              ),
-              const SizedBox(height: AppSpacing.xs),
-              Text(
-                item.specialtyName.isEmpty
-                    ? 'Fisioterapia'
-                    : item.specialtyName,
-                style: Theme.of(context).textTheme.titleMedium,
-              ),
-              const SizedBox(height: AppSpacing.md),
-            ],
-            StatusChip(status: item.status),
-            const SizedBox(height: AppSpacing.lg),
-            _DetailRow(
-              icon: Icons.calendar_today_outlined,
-              label: 'Data',
-              value: MaterialLocalizations.of(context)
-                  .formatMediumDate(item.dateTime),
-            ),
-            _DetailRow(
-              icon: Icons.schedule_outlined,
-              label: 'Horário',
-              value: MaterialLocalizations.of(context)
-                  .formatTimeOfDay(TimeOfDay.fromDateTime(item.dateTime)),
-            ),
-            if (professionalView)
-              ..._patientSection(context, item)
-            else
-              ..._professionalSection(context, item),
-            // O relato do paciente é informação só para o fisioterapeuta.
-            if (professionalView && item.observations?.isNotEmpty == true)
-              _DetailRow(
-                icon: Icons.notes_outlined,
-                label: professionalView
-                    ? 'Relato do que está sentindo'
-                    : 'Observações',
-                value: item.observations!,
-              ),
-          ],
-        );
+        if (widget.professionalView) {
+          return _ProfessionalDetails(item: item);
+        }
+        return _PatientDetails(item: item);
       },
     ),
   );
+}
 
-  /// Dados do paciente, mostrados ao fisioterapeuta para o contato e o atendimento.
-  List<Widget> _patientSection(BuildContext context, Appointment item) {
-    final info = item.patientInfo;
-    return [
-      _SectionTitle(
-        'Dados do paciente',
-        style: Theme.of(context).textTheme.titleMedium,
-      ),
-      _DetailRow(
-        icon: Icons.email_outlined,
-        label: 'E-mail para contato',
-        value: _orDash(info.email),
-      ),
-      _DetailRow(
-        icon: Icons.location_on_outlined,
-        label: 'Cidade e estado',
-        value: _cityState(info),
-      ),
-    ];
-  }
+/// Detalhe da consulta na visão do paciente: agendamento, fisioterapeuta e os
+/// sintomas que ele informou, no mesmo desenho da visão do fisioterapeuta.
+class _PatientDetails extends StatelessWidget {
+  const _PatientDetails({required this.item});
 
-  /// Dados do fisioterapeuta, mostrados ao paciente antes da consulta.
-  List<Widget> _professionalSection(BuildContext context, Appointment item) {
+  final Appointment item;
+
+  @override
+  Widget build(BuildContext context) {
+    final loc = MaterialLocalizations.of(context);
     final info = item.professionalInfo;
-    return [
-      _SectionTitle(
-        'Dados do fisioterapeuta',
-        style: Theme.of(context).textTheme.titleMedium,
-      ),
-      _DetailRow(
-        icon: Icons.person_outline,
-        label: 'Fisioterapeuta',
-        value: _orDash(item.professionalName),
-      ),
-      _DetailRow(
-        icon: Icons.medical_services_outlined,
-        label: 'Especialização',
-        value: _orDash(item.specialtyName),
-      ),
-      _DetailRow(
-        icon: Icons.badge_outlined,
-        label: 'CREFITO',
-        value: _orDash(InputMasks.displayCrefito(item.professionalCrefito)),
-      ),
-      _DetailRow(
-        icon: Icons.email_outlined,
-        label: 'E-mail para contato',
-        value: _orDash(info.email),
-      ),
-      if (item.professionalBio.isNotEmpty)
-        _DetailRow(
-          icon: Icons.description_outlined,
-          label: 'Descrição',
-          value: item.professionalBio,
+    final report = item.observations?.trim() ?? '';
+
+    return ListView(
+      padding: const EdgeInsets.all(AppSpacing.md),
+      children: [
+        InfoCard(
+          title: 'Informações do agendamento',
+          children: [
+            InfoLine(
+              icon: Icons.calendar_today_outlined,
+              label: 'Data',
+              value: weekdayShortMonthDate(item.dateTime),
+            ),
+            const SizedBox(height: AppSpacing.md),
+            InfoLine(
+              icon: Icons.schedule_outlined,
+              label: 'Horário',
+              value: loc.formatTimeOfDay(TimeOfDay.fromDateTime(item.dateTime)),
+            ),
+          ],
         ),
-    ];
+        const SizedBox(height: AppSpacing.md),
+        InfoCard(
+          title: 'Informações do fisioterapeuta',
+          children: [
+            InfoLine(
+              icon: Icons.person_outline,
+              label: 'Fisioterapeuta',
+              value: _orDash(item.professionalName),
+            ),
+            const SizedBox(height: AppSpacing.md),
+            InfoLine(
+              icon: Icons.medical_services_outlined,
+              label: 'Especialização',
+              value: _orDash(item.specialtyName),
+            ),
+            const SizedBox(height: AppSpacing.md),
+            InfoLine(
+              icon: Icons.badge_outlined,
+              label: 'CREFITO',
+              value: _orDash(
+                InputMasks.displayCrefito(item.professionalCrefito),
+              ),
+            ),
+            const SizedBox(height: AppSpacing.md),
+            InfoLine(
+              icon: Icons.email_outlined,
+              label: 'E-mail para contato',
+              value: _orDash(info.email),
+            ),
+            if (item.professionalBio.trim().isNotEmpty) ...[
+              const SizedBox(height: AppSpacing.md),
+              InfoLine(
+                icon: Icons.description_outlined,
+                label: 'Descrição',
+                value: item.professionalBio,
+              ),
+            ],
+          ],
+        ),
+        if (report.isNotEmpty) ...[
+          const SizedBox(height: AppSpacing.md),
+          InfoCard(
+            title: 'Sintomas',
+            children: [
+              InfoLine(
+                icon: Icons.notes_outlined,
+                label: 'Sintomas informados',
+                value: report,
+              ),
+            ],
+          ),
+        ],
+      ],
+    );
   }
 
   static String _orDash(String value) => value.trim().isEmpty ? '—' : value;
+}
 
-  static String _cityState(ContactInfo info) {
-    final parts = [
+/// Detalhe da consulta na visão do fisioterapeuta: paciente, horário e relato,
+/// em cartões. Não mostra a especialidade do profissional.
+class _ProfessionalDetails extends StatelessWidget {
+  const _ProfessionalDetails({required this.item});
+
+  final Appointment item;
+
+  @override
+  Widget build(BuildContext context) {
+    final loc = MaterialLocalizations.of(context);
+    final info = item.patientInfo;
+    final cityState = [
       info.cidade.trim(),
       info.estado.trim(),
-    ].where((part) => part.isNotEmpty).toList();
-    return parts.isEmpty ? '—' : parts.join(' - ');
-  }
-}
+    ].where((part) => part.isNotEmpty).join(' - ');
+    final report = item.observations?.trim() ?? '';
 
-class _SectionTitle extends StatelessWidget {
-  const _SectionTitle(this.title, {this.style});
-
-  final String title;
-  final TextStyle? style;
-
-  @override
-  Widget build(BuildContext context) => Padding(
-    padding: const EdgeInsets.only(top: AppSpacing.lg, bottom: AppSpacing.xs),
-    child: Text(title, style: style),
-  );
-}
-
-class _DetailRow extends StatelessWidget {
-  const _DetailRow({
-    required this.icon,
-    required this.label,
-    required this.value,
-  });
-  final IconData icon;
-  final String label;
-  final String value;
-
-  @override
-  Widget build(BuildContext context) => Padding(
-    padding: const EdgeInsets.symmetric(vertical: AppSpacing.sm),
-    child: Row(
-      crossAxisAlignment: CrossAxisAlignment.start,
+    return ListView(
+      padding: const EdgeInsets.all(AppSpacing.md),
       children: [
-        Icon(icon),
-        const SizedBox(width: AppSpacing.sm),
-        Expanded(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(label, style: Theme.of(context).textTheme.labelLarge),
-              Text(value, style: Theme.of(context).textTheme.bodyLarge),
-            ],
-          ),
+        InfoCard(
+          title: 'Informações do agendamento',
+          children: [
+            InfoLine(
+              icon: Icons.calendar_today_outlined,
+              label: 'Data',
+              value: weekdayShortMonthDate(item.dateTime),
+            ),
+            const SizedBox(height: AppSpacing.md),
+            InfoLine(
+              icon: Icons.schedule_outlined,
+              label: 'Horário',
+              value: loc.formatTimeOfDay(TimeOfDay.fromDateTime(item.dateTime)),
+            ),
+          ],
+        ),
+        const SizedBox(height: AppSpacing.md),
+        InfoCard(
+          title: 'Informações do paciente',
+          children: [
+            InfoLine(
+              icon: Icons.person_outline,
+              label: 'Nome do paciente',
+              value: item.patientName.isEmpty ? 'Paciente' : item.patientName,
+            ),
+            const SizedBox(height: AppSpacing.md),
+            InfoLine(
+              icon: Icons.email_outlined,
+              label: 'E-mail para contato',
+              value: info.email.trim().isEmpty ? '—' : info.email,
+            ),
+            const SizedBox(height: AppSpacing.md),
+            InfoLine(
+              icon: Icons.location_on_outlined,
+              label: 'Cidade e estado',
+              value: cityState.isEmpty ? '—' : cityState,
+            ),
+            const SizedBox(height: AppSpacing.md),
+            InfoLine(
+              icon: Icons.notes_outlined,
+              label: 'Sintomas informados',
+              value: report.isEmpty ? 'Nenhum sintoma informado.' : report,
+            ),
+          ],
         ),
       ],
-    ),
-  );
+    );
+  }
 }

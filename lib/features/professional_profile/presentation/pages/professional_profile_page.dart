@@ -87,16 +87,7 @@ class _ProfessionalProfilePageState extends State<ProfessionalProfilePage> {
 
   @override
   Widget build(BuildContext context) => Scaffold(
-    appBar: AppBar(
-      title: const Text('Meu perfil profissional'),
-      actions: [
-        IconButton(
-          tooltip: 'Sair',
-          onPressed: _logout,
-          icon: const Icon(Icons.logout),
-        ),
-      ],
-    ),
+    appBar: AppBar(title: const Text('Perfil profissional')),
     body: SafeArea(child: _body(context)),
   );
 
@@ -149,8 +140,9 @@ class _ProfessionalProfilePageState extends State<ProfessionalProfilePage> {
                         ? ''
                         : InputMasks.applyTelefoneMask(profile.phone),
                   ),
-                  _field('Bio', profile.bio),
                   _field('Especialidade', profile.specialtyName),
+                  _field('Bio', profile.bio),
+
                   _field('Situação', profile.isActive ? 'Ativo' : 'Inativo'),
                 ],
               ),

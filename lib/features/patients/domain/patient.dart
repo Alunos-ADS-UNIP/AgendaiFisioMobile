@@ -55,4 +55,21 @@ class Patient {
   /// registro — ajuda a decidir se mostra "Completar perfil" em vez de
   /// "Editar perfil".
   bool get isPendingCompletion => nomeCompleto.trim() == 'Cadastro Pendente';
+
+  /// Cadastro com todos os dados obrigatórios para usar o aplicativo.
+  bool get isComplete {
+    final birth = dataNascimento;
+    return !isPendingCompletion &&
+        nomeCompleto.trim().isNotEmpty &&
+        cpf.replaceAll(RegExp(r'\D'), '').length == 11 &&
+        birth != null &&
+        birth.year > 1900 &&
+        telefone.trim().isNotEmpty &&
+        endereco.rua.trim().isNotEmpty &&
+        endereco.numero.trim().isNotEmpty &&
+        endereco.cep.trim().isNotEmpty &&
+        endereco.bairro.trim().isNotEmpty &&
+        endereco.cidade.trim().isNotEmpty &&
+        endereco.estado.trim().isNotEmpty;
+  }
 }

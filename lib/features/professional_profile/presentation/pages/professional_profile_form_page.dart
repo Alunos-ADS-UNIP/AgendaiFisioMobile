@@ -98,21 +98,15 @@ class _ProfessionalProfileFormPageState
   static String _formatDate(DateTime date) =>
       '${date.day.toString().padLeft(2, '0')}/${date.month.toString().padLeft(2, '0')}/${date.year}';
 
-  Future<void> _chooseBirthDate() async {
-    final now = DateTime.now();
-    final picked = await showDatePicker(
-      context: context,
-      initialDate: _birthDate ?? DateTime(now.year - 30),
-      firstDate: DateTime(1900),
-      lastDate: now,
-      helpText: 'Data de nascimento',
-    );
-    if (picked != null && mounted) {
-      setState(() {
-        _birthDate = picked;
-        _birthDateText.text = _formatDate(picked);
-      });
-    }
+  /// Lê a data digitada (DD/MM/AAAA). Vazia ou incompleta vira null.
+  void _onBirthDateChanged(String value) {
+    setState(() => _birthDate = InputMasks.parseDate(value));
+  }
+
+  String? _validateBirthDate(String? value) {
+    final date = InputMasks.parseDate(value ?? '');
+    if (date == null) return 'Informe uma data válida.';
+    return null;
   }
 
   Future<void> _chooseSpecialty() async {
@@ -169,7 +163,11 @@ class _ProfessionalProfileFormPageState
     final controller = widget.controller;
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Editar perfil profissional'),
+        title: Text(
+          widget.controller.profile?.isPendingCompletion ?? true
+              ? 'Completar perfil'
+              : 'Editar perfil',
+        ),
         actions: [
           if (widget.onLogout != null)
             IconButton(
@@ -243,13 +241,14 @@ class _ProfessionalProfileFormPageState
                       AppTextField(
                         label: 'Data de nascimento',
                         controller: _birthDateText,
-                        readOnly: true,
-                        onTap: _chooseBirthDate,
-                        suffixIcon: const Icon(Icons.calendar_today_outlined),
+                        keyboardType: TextInputType.number,
+                        textInputAction: TextInputAction.next,
+                        inputFormatters: [InputMasks.dataFormatter()],
+                        onChanged: _onBirthDateChanged,
+                        hint: 'DD/MM/AAAA',
+                        autovalidateMode: AutovalidateMode.onUserInteraction,
                         errorText: controller.errorFor('dataNascimento'),
-                        validator: (_) => _birthDate == null
-                            ? 'Selecione a data de nascimento.'
-                            : null,
+                        validator: _validateBirthDate,
                       ),
                     ],
                   ),

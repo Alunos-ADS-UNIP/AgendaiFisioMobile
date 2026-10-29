@@ -8,8 +8,8 @@ library;
 /// Horário do dia sem data (ex.: 08:00). Usado para turnos.
 class TimeOfDayValue implements Comparable<TimeOfDayValue> {
   const TimeOfDayValue(this.hour, this.minute)
-      : assert(hour >= 0 && hour < 24),
-        assert(minute >= 0 && minute < 60);
+    : assert(hour >= 0 && hour < 24),
+      assert(minute >= 0 && minute < 60);
 
   final int hour;
   final int minute;
@@ -125,7 +125,7 @@ class DayAvailability {
 /// Grade semanal completa (sempre 7 dias, segunda a domingo).
 class WeeklySchedule {
   WeeklySchedule({required List<DayAvailability> days})
-      : days = List.unmodifiable(_normalize(days));
+    : days = List.unmodifiable(_normalize(days));
 
   /// Grade vazia: nenhum dia ativo.
   factory WeeklySchedule.empty() => WeeklySchedule(days: const []);
@@ -145,8 +145,8 @@ class WeeklySchedule {
   DayAvailability dayOf(WeekDay day) => days.firstWhere((d) => d.day == day);
 
   WeeklySchedule withDay(DayAvailability updated) => WeeklySchedule(
-        days: [for (final d in days) d.day == updated.day ? updated : d],
-      );
+    days: [for (final d in days) d.day == updated.day ? updated : d],
+  );
 
   bool get hasAnyActiveDay => days.any((d) => d.enabled && d.shifts.isNotEmpty);
 

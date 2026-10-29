@@ -59,9 +59,8 @@ void main() {
         MaterialApp(
           theme: AppTheme.light,
           builder: (context, child) => MediaQuery(
-            data: MediaQuery.of(context).copyWith(
-              textScaler: TextScaler.linear(scale),
-            ),
+            data: MediaQuery.of(context)
+                .copyWith(textScaler: TextScaler.linear(scale)),
             child: child!,
           ),
           home: ProfessionalHomePage(

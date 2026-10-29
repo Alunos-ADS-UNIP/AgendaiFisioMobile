@@ -116,15 +116,34 @@ class ProfessionalCard extends StatelessWidget {
                         ),
                       ),
                     ),
-                    if (onInfo != null)
-                      Align(
-                        alignment: Alignment.centerLeft,
-                        child: TextButton.icon(
-                          onPressed: onInfo,
-                          icon: const Icon(Icons.person_search_outlined),
-                          label: const Text('Perfil do profissional'),
+                    if (onInfo != null) ...[
+                      const SizedBox(height: AppSpacing.sm),
+                      const Divider(height: 1),
+                      InkWell(
+                        onTap: onInfo,
+                        child: Padding(
+                          padding: const EdgeInsets.only(top: AppSpacing.sm),
+                          child: Row(
+                            children: [
+                              Expanded(
+                                child: Text(
+                                  'Ver perfil completo',
+                                  style: Theme.of(context).textTheme.labelLarge
+                                      ?.copyWith(
+                                        color: AppColors.primary,
+                                        fontWeight: FontWeight.w700,
+                                      ),
+                                ),
+                              ),
+                              const Icon(
+                                Icons.chevron_right,
+                                color: AppColors.primary,
+                              ),
+                            ],
+                          ),
                         ),
                       ),
+                    ],
                   ],
                 ),
               ),

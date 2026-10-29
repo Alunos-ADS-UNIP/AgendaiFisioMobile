@@ -242,9 +242,10 @@ void main() {
     await tester.ensureVisible(
       find.widgetWithText(TextFormField, 'Data de nascimento'),
     );
-    await tester.tap(find.widgetWithText(TextFormField, 'Data de nascimento'));
-    await tester.pumpAndSettle();
-    await tester.tap(find.text('OK'));
+    await tester.enterText(
+      find.widgetWithText(TextFormField, 'Data de nascimento'),
+      '01/01/1990',
+    );
     await tester.pumpAndSettle();
     await tester.ensureVisible(find.text('Salvar perfil'));
     await tester.tap(find.text('Salvar perfil'));
@@ -325,7 +326,10 @@ void main() {
     );
     await tester.pumpAndSettle();
     expect(find.text('Joana Silva'), findsOneWidget);
-    expect(find.text('Alterar especialidade', skipOffstage: false), findsNothing);
+    expect(
+      find.text('Alterar especialidade', skipOffstage: false),
+      findsNothing,
+    );
   });
 
   testWidgets('perfil e formulário cabem em 360 px com texto a 150%', (

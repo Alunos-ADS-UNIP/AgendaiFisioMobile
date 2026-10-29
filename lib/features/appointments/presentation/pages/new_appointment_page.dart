@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../../../../core/widgets/month_calendar_picker.dart';
 import '../../../../core/widgets/time_slot_picker_sheet.dart';
 import '../../../../core/utils/input_masks.dart';
 import '../../../../core/theme/app_spacing.dart';
@@ -8,6 +9,7 @@ import '../../../../core/widgets/app_secondary_button.dart';
 import '../../../../core/widgets/app_text_field.dart';
 import '../../../../core/widgets/empty_state.dart';
 import '../../../../core/widgets/error_state.dart';
+import '../../../../core/widgets/info_card.dart';
 import '../../../../core/widgets/professional_card.dart';
 import '../../domain/appointment.dart';
 import '../../domain/appointment_failure.dart';
@@ -50,6 +52,24 @@ class _NewAppointmentPageState extends State<NewAppointmentPage> {
   bool _submitting = false;
   int _step = 0;
   String? _error;
+  final Map<String, Future<String>> _emailCache = {};
+
+  /// E-mail de contato do fisioterapeuta, buscado uma vez por profissional.
+  Future<String> _emailFor(String? professionalId) {
+    if (professionalId == null) return Future.value('');
+    return _emailCache.putIfAbsent(professionalId, () async {
+      final repository = widget.repository;
+      final directory = repository is ProfessionalContactDirectory
+          ? repository as ProfessionalContactDirectory
+          : null;
+      if (directory == null) return '';
+      try {
+        return await directory.fetchProfessionalEmail(professionalId);
+      } catch (_) {
+        return '';
+      }
+    });
+  }
 
   @override
   void initState() {
@@ -191,23 +211,6 @@ class _NewAppointmentPageState extends State<NewAppointmentPage> {
     }
   }
 
-  Future<void> _selectDay() async {
-    final now = DateTime.now();
-    final picked = await showDatePicker(
-      context: context,
-      initialDate: _day ?? now.add(const Duration(days: 1)),
-      firstDate: DateTime(now.year, now.month, now.day),
-      lastDate: DateTime(now.year + 2, 12, 31),
-      helpText: 'Escolha o dia da consulta',
-    );
-    if (picked != null && mounted) {
-      setState(() {
-        _day = picked;
-        _error = null;
-      });
-    }
-  }
-
   Future<void> _selectTime() async {
     final picked = await TimeSlotPickerSheet.show(
       context,
@@ -247,7 +250,7 @@ class _NewAppointmentPageState extends State<NewAppointmentPage> {
       return;
     }
     if (_notesController.text.trim().length > 1000) {
-      setState(() => _error = 'As observações devem ter até 1000 caracteres.');
+      setState(() => _error = 'Os sintomas devem ter até 1000 caracteres.');
       return;
     }
     setState(() {
@@ -294,6 +297,11 @@ class _NewAppointmentPageState extends State<NewAppointmentPage> {
     } finally {
       if (mounted) setState(() => _submitting = false);
     }
+  }
+
+  String _crefitoText() {
+    final crefito = InputMasks.displayCrefito(_professional?.crefito ?? '');
+    return crefito.isEmpty ? '—' : crefito;
   }
 
   @override
@@ -448,23 +456,54 @@ class _NewAppointmentPageState extends State<NewAppointmentPage> {
   Widget _reviewStep(BuildContext context) => Column(
     crossAxisAlignment: CrossAxisAlignment.stretch,
     children: [
-      Text('Revise os dados', style: Theme.of(context).textTheme.titleLarge),
+      Text(
+        'Dados do profissional',
+        style: Theme.of(context).textTheme.titleLarge,
+      ),
+      const SizedBox(height: AppSpacing.md),
+      InfoLine(
+        icon: Icons.person_outline,
+        label: 'Fisioterapeuta',
+        value: _professional?.name ?? '—',
+      ),
+      const SizedBox(height: AppSpacing.md),
+      InfoLine(
+        icon: Icons.medical_services_outlined,
+        label: 'Especialização',
+        value: _specialty?.name ?? '—',
+      ),
+      const SizedBox(height: AppSpacing.md),
+      InfoLine(
+        icon: Icons.badge_outlined,
+        label: 'CREFITO',
+        value: _crefitoText(),
+      ),
+      const SizedBox(height: AppSpacing.md),
+      FutureBuilder<String>(
+        future: _emailFor(_professional?.id),
+        builder: (context, snapshot) => InfoLine(
+          icon: Icons.email_outlined,
+          label: 'E-mail para contato',
+          value: (snapshot.data ?? '').isEmpty ? '—' : snapshot.data!,
+        ),
+      ),
+      if ((_professional?.bio ?? '').trim().isNotEmpty) ...[
+        const SizedBox(height: AppSpacing.md),
+        InfoLine(
+          icon: Icons.description_outlined,
+          label: 'Descrição',
+          value: _professional!.bio,
+        ),
+      ],
+      const SizedBox(height: AppSpacing.lg),
+      Text('Selecione o dia', style: Theme.of(context).textTheme.titleLarge),
       const SizedBox(height: AppSpacing.sm),
-      ListTile(
-        leading: const Icon(Icons.spa_outlined),
-        title: Text(_specialty?.name ?? 'Especialidade'),
-      ),
-      ListTile(
-        leading: const Icon(Icons.person_outline),
-        title: Text(_professional?.name ?? 'Profissional'),
-        subtitle: Text(InputMasks.displayCrefito(_professional?.crefito ?? '')),
-      ),
-      AppSecondaryButton(
-        onPressed: _selectDay,
-        icon: Icons.calendar_today_outlined,
-        label: _day == null
-            ? 'Selecionar data'
-            : MaterialLocalizations.of(context).formatMediumDate(_day!),
+      MonthCalendarPicker(
+        selected: _day,
+        onChanged: (day) => setState(() {
+          _day = day;
+          _error = null;
+        }),
       ),
       const SizedBox(height: AppSpacing.xs),
       AppSecondaryButton(
@@ -474,8 +513,8 @@ class _NewAppointmentPageState extends State<NewAppointmentPage> {
       ),
       const SizedBox(height: AppSpacing.sm),
       AppTextField(
-        label: 'Observações (opcional)',
-        hint: 'Conte algo que o profissional precisa saber',
+        label: 'Sintomas (opcional)',
+        hint: 'Descreva o que você está sentindo',
         controller: _notesController,
         maxLines: 4,
         textInputAction: TextInputAction.newline,

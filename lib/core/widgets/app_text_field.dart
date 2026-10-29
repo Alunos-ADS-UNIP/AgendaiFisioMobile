@@ -26,6 +26,7 @@ class AppTextField extends StatelessWidget {
     this.inputFormatters,
     this.readOnly = false,
     this.onTap,
+    this.autovalidateMode,
     super.key,
   });
 
@@ -48,6 +49,10 @@ class AppTextField extends StatelessWidget {
   final bool readOnly;
   final VoidCallback? onTap;
 
+  /// Quando o validator roda. Use [AutovalidateMode.onUserInteraction] para
+  /// mostrar o erro enquanto o usuário digita.
+  final AutovalidateMode? autovalidateMode;
+
   @override
   Widget build(BuildContext context) {
     return TextFormField(
@@ -55,6 +60,7 @@ class AppTextField extends StatelessWidget {
       keyboardType: keyboardType,
       textInputAction: textInputAction,
       validator: validator,
+      autovalidateMode: autovalidateMode,
       onChanged: onChanged,
       onFieldSubmitted: onSubmitted,
       obscureText: obscureText,

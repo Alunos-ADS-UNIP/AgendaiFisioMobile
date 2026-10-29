@@ -9,8 +9,9 @@ class _FakeGateway implements ScheduleBlockGateway {
   var _nextId = 0;
 
   @override
-  Future<List<ScheduleBlock>> fetchScheduleBlocks(String professionalId) async =>
-      List.of(blocks);
+  Future<List<ScheduleBlock>> fetchScheduleBlocks(
+    String professionalId,
+  ) async => List.of(blocks);
 
   @override
   Future<void> createScheduleBlock({
@@ -81,28 +82,34 @@ void main() {
     expect(schedule.dayOf(WeekDay.tuesday).enabled, isFalse);
   });
 
-  test('ao ampliar a grade cancela só os bloqueios que voltaram a valer', () async {
-    await repository.saveWeeklySchedule(onlyMondayMorning());
-    gateway.created.clear();
+  test(
+    'ao ampliar a grade cancela só os bloqueios que voltaram a valer',
+    () async {
+      await repository.saveWeeklySchedule(onlyMondayMorning());
+      gateway.created.clear();
 
-    await repository.saveWeeklySchedule(
-      WeeklySchedule(
-        days: const [
-          DayAvailability(
-            day: WeekDay.monday,
-            enabled: true,
-            shifts: [
-              TimeRange(start: TimeOfDayValue(8, 0), end: TimeOfDayValue(13, 0)),
-            ],
-          ),
-        ],
-      ),
-    );
+      await repository.saveWeeklySchedule(
+        WeeklySchedule(
+          days: const [
+            DayAvailability(
+              day: WeekDay.monday,
+              enabled: true,
+              shifts: [
+                TimeRange(
+                  start: TimeOfDayValue(8, 0),
+                  end: TimeOfDayValue(13, 0),
+                ),
+              ],
+            ),
+          ],
+        ),
+      );
 
-    // 12:00 e 12:30 das duas segundas-feiras do horizonte.
-    expect(gateway.cancelled, hasLength(4));
-    expect(gateway.created, isEmpty);
-  });
+      // 12:00 e 12:30 das duas segundas-feiras do horizonte.
+      expect(gateway.cancelled, hasLength(4));
+      expect(gateway.created, isEmpty);
+    },
+  );
 
   test('não bloqueia horários que já passaram', () async {
     final late = AppointmentBlockAvailabilityRepository(

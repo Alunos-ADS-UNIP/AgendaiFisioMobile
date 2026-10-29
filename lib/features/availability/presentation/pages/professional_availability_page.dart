@@ -30,8 +30,7 @@ class _ProfessionalAvailabilityPageState
   @override
   void initState() {
     super.initState();
-    _controller = AvailabilityController(repository: widget.repository)
-      ..load();
+    _controller = AvailabilityController(repository: widget.repository)..load();
   }
 
   @override
@@ -69,10 +68,8 @@ class _ProfessionalAvailabilityPageState
     ),
     body: AnimatedBuilder(
       animation: _controller,
-      builder: (context, _) => RefreshIndicator(
-        onRefresh: _controller.load,
-        child: _body(),
-      ),
+      builder: (context, _) =>
+          RefreshIndicator(onRefresh: _controller.load, child: _body()),
     ),
   );
 
@@ -87,8 +84,7 @@ class _ProfessionalAvailabilityPageState
     } else if (c.isUnavailable) {
       child = const EmptyState(
         title: 'Grade ainda não disponível',
-        message:
-            'Esta funcionalidade será liberada quando o sistema estiver pronto.',
+        message: 'Esta funcionalidade será liberada quando o sistema estiver pronto.',
         icon: Icons.construction_outlined,
       );
     } else if (c.failure != null) {

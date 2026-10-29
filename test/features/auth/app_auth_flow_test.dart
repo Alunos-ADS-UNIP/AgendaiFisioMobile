@@ -55,7 +55,7 @@ void main() {
     await tester.pumpAndSettle();
 
     // Primeiro acesso: o perfil é completado antes da tela principal.
-    expect(find.text('Editar perfil profissional'), findsOneWidget);
+    expect(find.text('Completar perfil'), findsOneWidget);
     expect(find.text('Especialidade'), findsOneWidget);
     expect(find.byType(NavigationBar), findsNothing);
   });

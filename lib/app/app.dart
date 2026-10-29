@@ -193,10 +193,13 @@ class _AgendaiFisioAppState extends State<AgendaiFisioApp> {
         onLogout: () => unawaited(session.logout()),
       );
     }
-    return PatientAreaPage(
+    return _PatientHome(
+      key: ValueKey('patient-${user.userId}'),
+      api: _patientApi!,
       repository: _appointmentRepository!,
       historyRepository: _historyRepository,
       patientName: user.email.split('@').first,
+      onLogout: () => unawaited(session.logout()),
       profileBuilder: (context) => _buildPatientProfile(context, session),
     );
   }
@@ -289,6 +292,105 @@ class _AgendaiFisioAppState extends State<AgendaiFisioApp> {
   }
 }
 
+/// Início do paciente. Enquanto o cadastro não estiver completo, mostra só o
+/// formulário de cadastro: o paciente não usa o aplicativo sem ele.
+class _PatientHome extends StatefulWidget {
+  const _PatientHome({
+    required this.api,
+    required this.repository,
+    required this.historyRepository,
+    required this.patientName,
+    required this.onLogout,
+    required this.profileBuilder,
+    super.key,
+  });
+
+  final PatientApi api;
+  final AppointmentRepository repository;
+  final HistoryRepository? historyRepository;
+  final String patientName;
+  final VoidCallback onLogout;
+  final WidgetBuilder profileBuilder;
+
+  @override
+  State<_PatientHome> createState() => _PatientHomeState();
+}
+
+class _PatientHomeState extends State<_PatientHome> {
+  late final PatientProfileController _controller = PatientProfileController(
+    widget.api,
+  )..load();
+  late final PatientProfileFormController _formController =
+      PatientProfileFormController(widget.api);
+  bool _logoutRequested = false;
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    _formController.dispose();
+    super.dispose();
+  }
+
+  void _logoutOnce() {
+    if (_logoutRequested) return;
+    _logoutRequested = true;
+    widget.onLogout();
+  }
+
+  @override
+  Widget build(BuildContext context) => ListenableBuilder(
+    listenable: _controller,
+    builder: (context, _) {
+      if (_controller.isSessionExpired) {
+        WidgetsBinding.instance.addPostFrameCallback((_) => _logoutOnce());
+      }
+      final patient = _controller.patient;
+      if (_controller.status == PatientProfileStatus.loading &&
+          patient == null) {
+        return const _SessionSplash();
+      }
+      if (patient == null) {
+        return Scaffold(
+          appBar: AppBar(
+            title: const Text('AgendaiFisio'),
+            actions: [
+              IconButton(
+                tooltip: 'Sair',
+                onPressed: _logoutOnce,
+                icon: const Icon(Icons.logout),
+              ),
+            ],
+          ),
+          body: SafeArea(
+            child: ErrorState(
+              message: _controller.errorMessage ?? 'Não foi possível carregar.',
+              onRetry: _controller.load,
+            ),
+          ),
+        );
+      }
+      if (!patient.isComplete) {
+        return PatientProfileFormPage(
+          controller: _formController,
+          currentPatient: patient,
+          onSaved: _controller.load,
+          onLogout: _logoutOnce,
+          title: 'Completar perfil',
+        );
+      }
+      return PatientAreaPage(
+        repository: widget.repository,
+        historyRepository: widget.historyRepository,
+        // Nome do cadastro (a saudação mostra só o primeiro e o último nome).
+        patientName: patient.nomeCompleto.trim().isEmpty
+            ? widget.patientName
+            : patient.nomeCompleto,
+        profileBuilder: widget.profileBuilder,
+      );
+    },
+  );
+}
+
 class _ProfessionalHome extends StatefulWidget {
   const _ProfessionalHome({
     required this.api,
@@ -359,8 +461,7 @@ class _ProfessionalHomeState extends State<_ProfessionalHome> {
             ],
           ),
           body: SafeArea(
-            child:
-                _controller.status == ProfessionalProfileStatus.forbidden
+            child: _controller.status == ProfessionalProfileStatus.forbidden
                 ? const ErrorState(
                     title: 'Acesso restrito',
                     message: 'Esta área é exclusiva para profissionais.',

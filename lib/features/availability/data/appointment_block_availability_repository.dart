@@ -104,7 +104,9 @@ class AppointmentBlockAvailabilityRepository implements AvailabilityRepository {
   @override
   Future<void> saveWeeklySchedule(WeeklySchedule schedule) async {
     final now = _clock();
-    final existing = {for (final b in await _futureBlocks()) _key(b.dateTime): b};
+    final existing = {
+      for (final b in await _futureBlocks()) _key(b.dateTime): b,
+    };
 
     final wanted = <String, DateTime>{};
     final today = _dateOnly(now);
@@ -144,8 +146,9 @@ class AppointmentBlockAvailabilityRepository implements AvailabilityRepository {
   Future<List<AvailableSlot>> fetchSlots({
     required String professionalId,
     required DateTime date,
-  }) =>
-      Future.error(const AvailabilityException(AvailabilityFailure.unavailable));
+  }) => Future.error(
+    const AvailabilityException(AvailabilityFailure.unavailable),
+  );
 
   Future<List<ScheduleBlock>> _futureBlocks() async {
     final now = _clock();

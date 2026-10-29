@@ -35,15 +35,17 @@ Map<String, dynamic> _completeProfile() => {
 
 void main() {
   test('cadastro completo não tem campos faltando', () async {
-    expect(await _repo(_completeProfile()).missingPatientProfileFields(), isEmpty);
+    expect(
+      await _repo(_completeProfile()).missingPatientProfileFields(),
+      isEmpty,
+    );
   });
 
   test('cadastro pendente aponta o nome como faltante', () async {
     final profile = _completeProfile()..['nomeCompleto'] = 'Cadastro Pendente';
-    expect(
-      await _repo(profile).missingPatientProfileFields(),
-      ['nome completo'],
-    );
+    expect(await _repo(profile).missingPatientProfileFields(), [
+      'nome completo',
+    ]);
   });
 
   test('endereço sem cidade aponta a cidade como faltante', () async {

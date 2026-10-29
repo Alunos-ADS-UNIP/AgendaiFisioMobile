@@ -67,6 +67,27 @@ abstract final class InputMasks {
 
   static MaskedInputFormatter cepFormatter() => MaskedInputFormatter(cep);
 
+  /// Data digitada no formato DD/MM/AAAA, sem seletor de calendário.
+  static MaskedInputFormatter dataFormatter() => MaskedInputFormatter(data);
+
+  static const data = '##/##/####';
+  static final _dataPattern = RegExp(r'^(\d{2})/(\d{2})/(\d{4})$');
+
+  /// Converte DD/MM/AAAA em data. Devolve null quando o texto está incompleto
+  /// ou não existe no calendário (ex.: 31/02).
+  static DateTime? parseDate(String value) {
+    final match = _dataPattern.firstMatch(value.trim());
+    if (match == null) return null;
+    final day = int.parse(match.group(1)!);
+    final month = int.parse(match.group(2)!);
+    final year = int.parse(match.group(3)!);
+    final date = DateTime(year, month, day);
+    if (date.year != year || date.month != month || date.day != day) {
+      return null;
+    }
+    return date;
+  }
+
   /// CREFITO no formato convencional: número de 3 a 6 dígitos, hífen e a letra
   /// da região (ex.: 12345-F). O formatador aceita o que for digitado e monta o
   /// padrão: até 6 dígitos e, depois deles, a letra da região.

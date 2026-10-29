@@ -5,7 +5,10 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
-  Future<void> open(WidgetTester tester, {required bool professionalView}) async {
+  Future<void> open(
+    WidgetTester tester, {
+    required bool professionalView,
+  }) async {
     await tester.pumpWidget(
       MaterialApp(
         theme: AppTheme.light,
@@ -24,8 +27,10 @@ void main() {
     expect(find.byType(FloatingActionButton), findsNothing);
   });
 
-  testWidgets('paciente continua vendo o botão de agendar', (tester) async {
+  testWidgets('paciente não vê botão flutuante de agendar na agenda', (
+    tester,
+  ) async {
     await open(tester, professionalView: false);
-    expect(find.text('Agendar'), findsOneWidget);
+    expect(find.byType(FloatingActionButton), findsNothing);
   });
 }

@@ -64,13 +64,6 @@ class _AppointmentsPageState extends State<AppointmentsPage> {
         ),
       ],
     ),
-    floatingActionButton: widget.professionalView
-        ? null
-        : FloatingActionButton.extended(
-            onPressed: _newAppointment,
-            icon: const Icon(Icons.add),
-            label: const Text('Agendar'),
-          ),
     body: ListenableBuilder(
       listenable: _controller,
       builder: (context, _) {
@@ -88,12 +81,12 @@ class _AppointmentsPageState extends State<AppointmentsPage> {
             title: 'Nenhum agendamento encontrado',
             message: _controller.filters.isEmpty
                 ? (widget.professionalView
-                      ? 'Quando um paciente agendar uma consulta, ela aparecerá aqui.'
-                      : 'Quando você marcar uma consulta, ela aparecerá aqui.')
+                      ? 'Quando agendadas,suas consultas aparecerão aqui.'
+                      : 'Quando agendadas,suas consultas aparecerão aqui.')
                 : 'Tente alterar ou limpar os filtros da agenda.',
             icon: Icons.calendar_month_outlined,
             actionLabel: _controller.filters.isEmpty
-                ? (widget.professionalView ? null : 'Criar agendamento')
+                ? (widget.professionalView ? null : 'Agendar')
                 : 'Limpar filtros',
             onAction: _controller.filters.isEmpty
                 ? (widget.professionalView ? null : _newAppointment)

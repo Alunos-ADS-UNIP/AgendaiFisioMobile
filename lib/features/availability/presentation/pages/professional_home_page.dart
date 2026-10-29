@@ -1,11 +1,12 @@
 import 'package:flutter/material.dart';
 
-import '../../../../core/theme/app_colors.dart';
+import '../../../../core/utils/person_name.dart';
 import '../../../../core/theme/app_spacing.dart';
 import '../../../../core/widgets/app_loading_skeleton.dart';
 import '../../../../core/widgets/appointment_card.dart';
 import '../../../../core/widgets/empty_state.dart';
 import '../../../../core/widgets/error_state.dart';
+import '../../../../core/widgets/today_card.dart';
 import '../../../appointments/domain/appointment.dart';
 import '../../../appointments/domain/appointment_repository.dart';
 import '../../domain/professional_day_summary.dart';
@@ -64,7 +65,7 @@ class _ProfessionalHomePageState extends State<ProfessionalHomePage> {
           padding: const EdgeInsets.all(AppSpacing.md),
           children: [
             Text(
-              'Olá${widget.professionalName?.isNotEmpty == true ? ', ${widget.professionalName}' : ''}!',
+              'Olá${shortPersonName(widget.professionalName).isEmpty ? '' : ', ${shortPersonName(widget.professionalName)}'}!',
               style: Theme.of(context).textTheme.headlineMedium,
             ),
             const SizedBox(height: AppSpacing.xs),
@@ -103,17 +104,14 @@ class _ProfessionalHomePageState extends State<ProfessionalHomePage> {
     final loc = MaterialLocalizations.of(context);
 
     return [
-      _TodayCard(count: summary.todayCount),
+      TodayCard(count: summary.todayCount),
       const SizedBox(height: AppSpacing.lg),
-      Text(
-        'Próximas consultas',
-        style: Theme.of(context).textTheme.titleLarge,
-      ),
+      Text('Próximas consultas', style: Theme.of(context).textTheme.titleLarge),
       const SizedBox(height: AppSpacing.sm),
       if (summary.upcoming.isEmpty)
         const EmptyState(
-          title: 'Nenhuma consulta próxima',
-          message: 'Quando um paciente agendar uma consulta, ela aparece aqui.',
+          title: 'Nenhuma consulta encontrada',
+          message: 'Quando agendadas,suas próximas consultas aparecerão aqui.',
           icon: Icons.event_available_outlined,
         )
       else
@@ -136,49 +134,5 @@ class _ProfessionalHomePageState extends State<ProfessionalHomePage> {
             ),
           ),
     ];
-  }
-}
-
-class _TodayCard extends StatelessWidget {
-  const _TodayCard({required this.count});
-
-  final int count;
-
-  @override
-  Widget build(BuildContext context) {
-    final text = switch (count) {
-      0 => 'Nenhuma consulta hoje',
-      1 => '1 consulta hoje',
-      _ => '$count consultas hoje',
-    };
-    return Semantics(
-      container: true,
-      label: 'Resumo do dia: $text',
-      child: ExcludeSemantics(
-        child: DecoratedBox(
-          decoration: BoxDecoration(
-            color: AppColors.primaryLight,
-            borderRadius: BorderRadius.circular(16),
-          ),
-          child: Padding(
-            padding: const EdgeInsets.all(AppSpacing.md),
-            child: Row(
-              children: [
-                const Icon(Icons.today_outlined, color: AppColors.primaryDark),
-                const SizedBox(width: AppSpacing.sm),
-                Flexible(
-                  child: Text(
-                    text,
-                    style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                      color: AppColors.primaryDark,
-                    ),
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ),
-      ),
-    );
   }
 }

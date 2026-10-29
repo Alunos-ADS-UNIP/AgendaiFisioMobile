@@ -27,8 +27,7 @@ abstract interface class AvailabilityRepository {
 class UnavailableAvailabilityRepository implements AvailabilityRepository {
   const UnavailableAvailabilityRepository();
 
-  static const _error =
-      AvailabilityException(AvailabilityFailure.unavailable);
+  static const _error = AvailabilityException(AvailabilityFailure.unavailable);
 
   @override
   Future<WeeklySchedule> fetchWeeklySchedule() => Future.error(_error);
@@ -41,6 +40,5 @@ class UnavailableAvailabilityRepository implements AvailabilityRepository {
   Future<List<AvailableSlot>> fetchSlots({
     required String professionalId,
     required DateTime date,
-  }) =>
-      Future.error(_error);
+  }) => Future.error(_error);
 }
