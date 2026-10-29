@@ -97,8 +97,7 @@ class _PatientHomePageState extends State<PatientHomePage> {
               else if (futureAppointments.isEmpty)
                 const EmptyState(
                   title: 'Nenhuma consulta encontrada.',
-                  message:
-                      'Quando agendadas,suas próximas consultas aparecerão aqui.',
+                  message: 'Quando agendadas,suas próximas consultas aparecerão aqui.',
                   icon: Icons.event_available_outlined,
                 )
               else ...[

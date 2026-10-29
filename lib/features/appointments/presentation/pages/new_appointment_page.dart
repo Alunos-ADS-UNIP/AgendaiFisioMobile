@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 
 import '../../../../core/widgets/month_calendar_picker.dart';
 import '../../../../core/widgets/time_slot_picker_sheet.dart';
-import '../../../../core/utils/input_masks.dart';
 import '../../../../core/theme/app_spacing.dart';
 import '../../../../core/widgets/app_primary_button.dart';
 import '../../../../core/widgets/app_secondary_button.dart';
@@ -300,7 +299,7 @@ class _NewAppointmentPageState extends State<NewAppointmentPage> {
   }
 
   String _crefitoText() {
-    final crefito = InputMasks.displayCrefito(_professional?.crefito ?? '');
+    final crefito = _professional?.crefito ?? '';
     return crefito.isEmpty ? '—' : crefito;
   }
 

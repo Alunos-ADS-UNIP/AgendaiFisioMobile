@@ -133,7 +133,7 @@ class _ProfessionalProfilePageState extends State<ProfessionalProfilePage> {
                     profile.isPendingCompletion ? 'Pendente' : profile.name,
                   ),
                   _field('E-mail', profile.email),
-                  _field('CREFITO', InputMasks.displayCrefito(profile.crefito)),
+                  _field('CREFITO', profile.crefito),
                   _field(
                     'Telefone',
                     profile.phone.isEmpty

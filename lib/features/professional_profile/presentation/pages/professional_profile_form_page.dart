@@ -60,7 +60,7 @@ class _ProfessionalProfileFormPageState
     final profile = widget.controller.profile;
     if (widget.controller.canEdit && profile != null) {
       _name.text = profile.isPendingCompletion ? '' : profile.name;
-      _crefito.text = InputMasks.displayCrefito(profile.crefito);
+      _crefito.text = profile.crefito;
       _phone.text = InputMasks.applyTelefoneMask(profile.phone);
       _bio.text = profile.bio;
       _specialtyText.text = profile.specialtyName;
@@ -275,11 +275,13 @@ class _ProfessionalProfileFormPageState
                         label: 'CREFITO',
                         controller: _crefito,
                         textInputAction: TextInputAction.next,
-                        inputFormatters: [InputMasks.crefitoFormatter()],
                         errorText: controller.errorFor('crefito'),
-                        validator: (value) => InputMasks.isCrefito(value ?? '')
-                            ? null
-                            : 'Use o formato 12345-F.',
+                        validator: (value) {
+                          final length = value?.trim().length ?? 0;
+                          return length < 4 || length > 20
+                              ? 'Informe entre 4 e 20 caracteres.'
+                              : null;
+                        },
                       ),
                       const SizedBox(height: AppSpacing.md),
                       AppTextField(

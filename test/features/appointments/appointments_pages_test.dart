@@ -34,7 +34,7 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('Olá, Ana!'), findsOneWidget);
-    expect(find.text('Próxima consulta'), findsOneWidget);
+    expect(find.text('Próximas consultas'), findsOneWidget);
     expect(find.text('Dra. Marina Lopes'), findsOneWidget);
     expect(find.text('Agendar consulta'), findsNothing);
     expect(find.text('Minha agenda'), findsNothing);
@@ -72,10 +72,7 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    expect(
-      find.text('Você ainda não tem uma próxima consulta'),
-      findsOneWidget,
-    );
+    expect(find.text('Nenhuma consulta encontrada.'), findsOneWidget);
   });
 
   testWidgets('home ignora consulta futura cancelada', (tester) async {

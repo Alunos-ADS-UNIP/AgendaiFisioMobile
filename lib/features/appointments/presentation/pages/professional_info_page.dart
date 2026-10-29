@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 
 import '../../../../core/theme/app_spacing.dart';
-import '../../../../core/utils/input_masks.dart';
 import '../../../../core/widgets/app_primary_button.dart';
 import '../../../../core/widgets/app_secondary_button.dart';
 import '../../../../core/widgets/info_card.dart';
@@ -75,9 +74,7 @@ class _ProfessionalInfoPageState extends State<ProfessionalInfoPage> {
                   InfoLine(
                     icon: Icons.badge_outlined,
                     label: 'CREFITO',
-                    value: _orDash(
-                      InputMasks.displayCrefito(widget.professional.crefito),
-                    ),
+                    value: _orDash(widget.professional.crefito),
                   ),
                   const SizedBox(height: AppSpacing.md),
                   InfoLine(

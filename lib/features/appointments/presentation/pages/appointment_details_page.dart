@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 
 import '../../../../core/theme/app_spacing.dart';
 import '../../../../core/utils/date_text.dart';
-import '../../../../core/utils/input_masks.dart';
 import '../../../../core/widgets/error_state.dart';
 import '../../../../core/widgets/info_card.dart';
 import '../../domain/appointment.dart';
@@ -112,9 +111,7 @@ class _PatientDetails extends StatelessWidget {
             InfoLine(
               icon: Icons.badge_outlined,
               label: 'CREFITO',
-              value: _orDash(
-                InputMasks.displayCrefito(item.professionalCrefito),
-              ),
+              value: _orDash(item.professionalCrefito),
             ),
             const SizedBox(height: AppSpacing.md),
             InfoLine(

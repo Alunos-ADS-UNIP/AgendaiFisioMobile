@@ -3,7 +3,6 @@ import 'package:flutter/material.dart';
 import '../theme/app_colors.dart';
 import '../theme/app_radius.dart';
 import '../theme/app_spacing.dart';
-import '../utils/input_masks.dart';
 
 class ProfessionalCard extends StatelessWidget {
   const ProfessionalCard({
@@ -70,7 +69,7 @@ class ProfessionalCard extends StatelessWidget {
                           ?.copyWith(color: AppColors.textSecondary),
                     ),
                     Text(
-                      InputMasks.displayCrefito(crefito),
+                      crefito,
                       style: Theme.of(context).textTheme.bodyMedium
                           ?.copyWith(color: AppColors.textSecondary),
                     ),
