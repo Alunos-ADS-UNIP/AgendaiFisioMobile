@@ -106,7 +106,11 @@ void main() {
     );
 
     await controller.load();
-    expect(paths, ['/api/auth/me', '/api/profissional/$_id']);
+    expect(paths, [
+      '/api/auth/me',
+      '/api/profissional/$_id',
+      '/api/profissional/me',
+    ]);
     expect(controller.status, ProfessionalProfileStatus.content);
     expect(controller.profile!.isPendingCompletion, isTrue);
     expect(controller.cpfInSession, isNull);
@@ -235,9 +239,10 @@ void main() {
       find.widgetWithText(TextFormField, 'Telefone com DDD'),
       '11987654321',
     );
+    await tester.enterText(find.widgetWithText(TextFormField, 'Crefito'), '3');
     await tester.enterText(
-      find.widgetWithText(TextFormField, 'CREFITO'),
-      '123456-F',
+      find.widgetWithText(TextFormField, 'Número'),
+      '100301',
     );
     await tester.ensureVisible(
       find.widgetWithText(TextFormField, 'Data de nascimento'),
@@ -253,8 +258,165 @@ void main() {
 
     expect(find.text('CREFITO já cadastrado.'), findsOneWidget);
     expect(controller.profile!.isPendingCompletion, isTrue);
-    expect(find.widgetWithText(TextFormField, '123456-F'), findsOneWidget);
+    expect(find.widgetWithText(TextFormField, '100301-F'), findsOneWidget);
     expect(find.widgetWithText(TextFormField, 'Joana Silva'), findsOneWidget);
+  });
+
+  testWidgets('CREFITO incompleto mostra aviso e não chama o servidor', (
+    tester,
+  ) async {
+    final methods = <String>[];
+    final controller = ProfessionalProfileController(
+      _api(
+        MockClient((request) async {
+          methods.add(request.method);
+          if (request.url.path == '/api/auth/me') return _json(_session);
+          return _json(_detail);
+        }),
+      ),
+    );
+    await controller.load();
+    methods.clear();
+    await tester.pumpWidget(
+      MaterialApp(
+        home: ProfessionalProfileFormPage(
+          controller: controller,
+          onSaved: () {},
+          onSessionExpired: () {},
+        ),
+      ),
+    );
+    await tester.enterText(find.widgetWithText(TextFormField, 'Crefito'), '3');
+    await tester.enterText(find.widgetWithText(TextFormField, 'Número'), '12');
+    await tester.pumpAndSettle();
+    expect(find.text('De 3 a 6 dígitos'), findsOneWidget);
+    final box = tester.getRect(
+      find.descendant(
+        of: find.widgetWithText(TextFormField, 'Número'),
+        matching: find.byType(InputDecorator),
+      ),
+    );
+    final warning = tester.getRect(find.text('De 3 a 6 dígitos'));
+    // O aviso fica logo abaixo da caixa, sem espaço extra.
+    expect(warning.top - box.bottom, lessThanOrEqualTo(4));
+
+    await tester.ensureVisible(find.text('Salvar perfil'));
+    await tester.tap(find.text('Salvar perfil'));
+    await tester.pumpAndSettle();
+    expect(find.text('De 3 a 6 dígitos'), findsOneWidget);
+    expect(methods.where((m) => m != 'GET'), isEmpty);
+  });
+
+  testWidgets('digitar só o número não mostra o aviso do Crefito', (
+    tester,
+  ) async {
+    final controller = ProfessionalProfileController(
+      _api(
+        MockClient((request) async {
+          if (request.url.path == '/api/auth/me') return _json(_session);
+          return _json(_detail);
+        }),
+      ),
+    );
+    await controller.load();
+    await tester.pumpWidget(
+      MaterialApp(
+        home: ProfessionalProfileFormPage(
+          controller: controller,
+          onSaved: () {},
+          onSessionExpired: () {},
+        ),
+      ),
+    );
+    await tester.enterText(find.widgetWithText(TextFormField, 'Número'), '12');
+    await tester.pumpAndSettle();
+    expect(find.text('De 3 a 6 dígitos'), findsOneWidget);
+    expect(find.text('De 1 a 20'), findsNothing);
+  });
+
+  testWidgets('edição bloqueia CPF, nascimento e CREFITO já cadastrados', (
+    tester,
+  ) async {
+    final controller = ProfessionalProfileController(
+      _api(
+        MockClient((request) async {
+          if (request.url.path == '/api/auth/me') return _json(_session);
+          if (request.url.path == '/api/profissional/me') {
+            return _json({
+              ..._detail,
+              'nomeCompleto': 'Joana Silva',
+              'cpf': '12345678909',
+              'dataNascimento': '1990-01-15T00:00:00',
+            });
+          }
+          return _json({
+            ..._detail,
+            'nomeCompleto': 'Joana Silva',
+            'crefito': 'CREFITO-3/100301-F',
+          });
+        }),
+      ),
+    );
+    await controller.load();
+    await tester.pumpWidget(
+      MaterialApp(
+        home: ProfessionalProfileFormPage(
+          controller: controller,
+          onSaved: () {},
+          onSessionExpired: () {},
+        ),
+      ),
+    );
+
+    TextField field(String label) => tester.widget<TextField>(
+      find.descendant(
+        of: find.widgetWithText(TextFormField, label),
+        matching: find.byType(TextField),
+      ),
+    );
+    expect(field('CPF').enabled, isFalse);
+    expect(field('CPF').controller!.text, '123.456.789-09');
+    expect(field('Data de nascimento').enabled, isFalse);
+    expect(field('Data de nascimento').controller!.text, '15/01/1990');
+    expect(field('Crefito').enabled, isFalse);
+    expect(field('Crefito').controller!.text, '3');
+    expect(field('Número').enabled, isFalse);
+    expect(field('Número').controller!.text, '100301-F');
+  });
+
+  testWidgets('cursor do número do CREFITO fica antes do -F', (tester) async {
+    final controller = ProfessionalProfileController(
+      _api(
+        MockClient((request) async {
+          if (request.url.path == '/api/auth/me') return _json(_session);
+          return _json(_detail);
+        }),
+      ),
+    );
+    await controller.load();
+    await tester.pumpWidget(
+      MaterialApp(
+        home: ProfessionalProfileFormPage(
+          controller: controller,
+          onSaved: () {},
+          onSessionExpired: () {},
+        ),
+      ),
+    );
+    final number = find.widgetWithText(TextFormField, 'Número');
+    await tester.ensureVisible(number);
+    await tester.tap(number);
+    await tester.pumpAndSettle();
+
+    final editable = tester.widget<EditableText>(
+      find.descendant(of: number, matching: find.byType(EditableText)),
+    );
+    expect(editable.controller.text, '-F');
+    expect(editable.controller.selection.baseOffset, 0);
+
+    await tester.enterText(number, '12');
+    await tester.pumpAndSettle();
+    expect(editable.controller.text, '12-F');
   });
 
   testWidgets('formulário bloqueia acesso fora da sessão profissional', (

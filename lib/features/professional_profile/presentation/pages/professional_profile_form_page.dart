@@ -44,7 +44,8 @@ class _ProfessionalProfileFormPageState
   final _formKey = GlobalKey<FormState>();
   final _name = TextEditingController();
   final _cpf = TextEditingController();
-  final _crefito = TextEditingController();
+  final _crefitoRegion = TextEditingController();
+  final _crefito = TextEditingController(text: '-F');
   final _phone = TextEditingController();
   final _birthDateText = TextEditingController();
   final _bio = TextEditingController();
@@ -52,15 +53,33 @@ class _ProfessionalProfileFormPageState
   Specialty? _specialty;
   DateTime? _birthDate;
   bool _sessionExpiredHandled = false;
+  bool _crefitoRegionTouched = false;
+  bool _crefitoNumberTouched = false;
+
+  /// CPF e data de nascimento já cadastrados não podem ser alterados: ficam
+  /// bloqueados na edição e só são preenchidos no primeiro acesso.
+  late final bool _identityLocked =
+      widget.controller.profile?.isPendingCompletion == false &&
+      widget.controller.cpfInSession != null &&
+      widget.controller.birthDateInSession != null;
+
+  /// O CREFITO já cadastrado no formato certo também fica bloqueado na edição.
+  /// Cadastros antigos fora do padrão continuam editáveis para correção.
+  late final bool _crefitoLocked =
+      widget.controller.profile?.isPendingCompletion == false &&
+      InputMasks.parseCrefito(widget.controller.profile?.crefito ?? '') != null;
 
   @override
   void initState() {
     super.initState();
     widget.controller.addListener(_onChanged);
+    _crefito.addListener(_keepCursorBeforeF);
     final profile = widget.controller.profile;
     if (widget.controller.canEdit && profile != null) {
       _name.text = profile.isPendingCompletion ? '' : profile.name;
-      _crefito.text = profile.crefito;
+      final crefito = InputMasks.parseCrefito(profile.crefito);
+      _crefitoRegion.text = crefito?.region ?? '';
+      _crefito.text = '${crefito?.number ?? ''}-F';
       _phone.text = InputMasks.applyTelefoneMask(profile.phone);
       _bio.text = profile.bio;
       _specialtyText.text = profile.specialtyName;
@@ -78,12 +97,24 @@ class _ProfessionalProfileFormPageState
     widget.controller.removeListener(_onChanged);
     _name.dispose();
     _cpf.dispose();
+    _crefitoRegion.dispose();
     _crefito.dispose();
     _phone.dispose();
     _birthDateText.dispose();
     _bio.dispose();
     _specialtyText.dispose();
     super.dispose();
+  }
+
+  /// O cursor do número do CREFITO nunca fica depois do "-F".
+  void _keepCursorBeforeF() {
+    final digits = InputMasks.digitsOnly(_crefito.text).length;
+    final selection = _crefito.selection;
+    if (selection.isValid &&
+        selection.isCollapsed &&
+        selection.baseOffset > digits) {
+      _crefito.selection = TextSelection.collapsed(offset: digits);
+    }
   }
 
   void _onChanged() {
@@ -124,10 +155,38 @@ class _ProfessionalProfileFormPageState
     });
   }
 
+  String? _crefitoRegionError() {
+    final region = int.tryParse(_crefitoRegion.text);
+    return region == null || region < 1 || region > 20 ? 'De 1 a 20' : null;
+  }
+
+  String? _crefitoNumberError() =>
+      InputMasks.digitsOnly(_crefito.text).length < 3
+      ? 'De 3 a 6 dígitos'
+      : null;
+
+  Widget _centeredError(BuildContext context, String? message) => Text(
+    message ?? '',
+    textAlign: TextAlign.center,
+    maxLines: 1,
+    style: Theme.of(context).textTheme.bodySmall
+        ?.copyWith(color: Theme.of(context).colorScheme.error),
+  );
+
   Future<void> _submit() async {
+    setState(() {
+      _crefitoRegionTouched = true;
+      _crefitoNumberTouched = true;
+    });
+    // O CREFITO é checado aqui: os dois campos mostram o aviso centralizado
+    // em vez do erro padrão do formulário.
+    final formValid = _formKey.currentState?.validate() ?? false;
+    final crefitoValid =
+        _crefitoRegionError() == null && _crefitoNumberError() == null;
     if (widget.controller.isSubmitting ||
         !widget.controller.canEdit ||
-        !(_formKey.currentState?.validate() ?? false)) {
+        !formValid ||
+        !crefitoValid) {
       return;
     }
     final date = _birthDate;
@@ -136,7 +195,7 @@ class _ProfessionalProfileFormPageState
       ProfessionalUpdateRequest(
         name: _name.text,
         cpf: _cpf.text,
-        crefito: _crefito.text,
+        crefito: InputMasks.buildCrefito(_crefitoRegion.text, _crefito.text),
         phone: _phone.text,
         birthDate: date,
         bio: _bio.text,
@@ -212,6 +271,7 @@ class _ProfessionalProfileFormPageState
                       AppTextField(
                         label: 'CPF',
                         controller: _cpf,
+                        enabled: !_identityLocked,
                         keyboardType: TextInputType.number,
                         textInputAction: TextInputAction.next,
                         inputFormatters: [InputMasks.cpfFormatter()],
@@ -241,6 +301,7 @@ class _ProfessionalProfileFormPageState
                       AppTextField(
                         label: 'Data de nascimento',
                         controller: _birthDateText,
+                        enabled: !_identityLocked,
                         keyboardType: TextInputType.number,
                         textInputAction: TextInputAction.next,
                         inputFormatters: [InputMasks.dataFormatter()],
@@ -271,18 +332,118 @@ class _ProfessionalProfileFormPageState
                         ),
                         const SizedBox(height: AppSpacing.md),
                       ],
-                      AppTextField(
-                        label: 'CREFITO',
-                        controller: _crefito,
-                        textInputAction: TextInputAction.next,
-                        errorText: controller.errorFor('crefito'),
-                        validator: (value) {
-                          final length = value?.trim().length ?? 0;
-                          return length < 4 || length > 20
-                              ? 'Informe entre 4 e 20 caracteres.'
-                              : null;
-                        },
+                      // CREFITO: primeiro o dígito da região, depois o restante.
+                      Row(
+                        children: [
+                          SizedBox(
+                            width: 150,
+                            child: AppTextField(
+                              label: 'Crefito',
+                              controller: _crefitoRegion,
+                              enabled: !_crefitoLocked,
+                              prefixText: 'CREFITO-',
+                              keyboardType: TextInputType.number,
+                              textInputAction: TextInputAction.next,
+                              inputFormatters: [
+                                InputMasks.crefitoRegionFormatter(),
+                              ],
+                              highlightError:
+                                  _crefitoRegionTouched &&
+                                  _crefitoRegionError() != null,
+                              onChanged: (_) =>
+                                  setState(() => _crefitoRegionTouched = true),
+                            ),
+                          ),
+                          // A barra fica entre os campos, fora deles, centralizada
+                          // na altura das caixas.
+                          Padding(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: AppSpacing.xs,
+                            ),
+                            child: Text(
+                              '/',
+                              style: Theme.of(context).textTheme.titleLarge
+                                  ?.copyWith(
+                                    color: _crefitoLocked
+                                        ? Theme.of(context)
+                                              .colorScheme
+                                              .onSurface
+                                              .withValues(alpha: 0.38)
+                                        : null,
+                                  ),
+                            ),
+                          ),
+                          Expanded(
+                            child: AppTextField(
+                              label: 'Número',
+                              controller: _crefito,
+                              enabled: !_crefitoLocked,
+                              keyboardType: TextInputType.number,
+                              textInputAction: TextInputAction.next,
+                              inputFormatters: [
+                                InputMasks.crefitoNumberFormatter(),
+                              ],
+                              // Só a borda vermelha; o texto vai no aviso
+                              // centralizado abaixo.
+                              highlightError:
+                                  (_crefitoNumberTouched &&
+                                      _crefitoNumberError() != null) ||
+                                  controller.errorFor('crefito') != null,
+                              onChanged: (_) =>
+                                  setState(() => _crefitoNumberTouched = true),
+                            ),
+                          ),
+                        ],
                       ),
+                      // Avisos centralizados embaixo de cada caixa.
+                      if ((_crefitoRegionTouched &&
+                              _crefitoRegionError() != null) ||
+                          (_crefitoNumberTouched &&
+                              _crefitoNumberError() != null) ||
+                          controller.errorFor('crefito') != null)
+                        Padding(
+                          padding: const EdgeInsets.only(top: AppSpacing.xxs),
+                          child: Row(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              SizedBox(
+                                width: 150,
+                                child: _centeredError(
+                                  context,
+                                  _crefitoRegionTouched
+                                      ? _crefitoRegionError()
+                                      : null,
+                                ),
+                              ),
+                              Visibility(
+                                visible: false,
+                                maintainSize: true,
+                                maintainAnimation: true,
+                                maintainState: true,
+                                child: Padding(
+                                  padding: const EdgeInsets.symmetric(
+                                    horizontal: AppSpacing.xs,
+                                  ),
+                                  child: Text(
+                                    '/',
+                                    style: Theme.of(context)
+                                        .textTheme
+                                        .titleLarge,
+                                  ),
+                                ),
+                              ),
+                              Expanded(
+                                child: _centeredError(
+                                  context,
+                                  (_crefitoNumberTouched
+                                          ? _crefitoNumberError()
+                                          : null) ??
+                                      controller.errorFor('crefito'),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
                       const SizedBox(height: AppSpacing.md),
                       AppTextField(
                         label: 'Bio (opcional)',

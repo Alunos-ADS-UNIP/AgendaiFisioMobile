@@ -67,6 +67,54 @@ abstract final class InputMasks {
 
   static MaskedInputFormatter cepFormatter() => MaskedInputFormatter(cep);
 
+  /// CREFITO no formato CREFITO-{região}/{número}-F (ex.: CREFITO-3/123456-F).
+  /// A região (1 a 20) e o número (3 a 6 dígitos) são digitados em campos
+  /// separados, nessa ordem, e montados aqui.
+  static final _crefitoPattern = RegExp(r'^CREFITO-(\d{1,2})/(\d{3,6})-F$');
+
+  /// Região do CREFITO: até 2 dígitos, sem zero à esquerda ("09" vira "9").
+  static TextInputFormatter crefitoRegionFormatter() =>
+      TextInputFormatter.withFunction((oldValue, newValue) {
+        var digits = digitsOnly(newValue.text).replaceFirst(RegExp(r'^0+'), '');
+        if (digits.length > 2) digits = digits.substring(0, 2);
+        return TextEditingValue(
+          text: digits,
+          selection: TextSelection.collapsed(offset: digits.length),
+        );
+      });
+
+  /// Número do CREFITO (até 6 dígitos) com "-F" colado logo depois dele.
+  /// O "-F" aparece mesmo sem dígitos, com o cursor sempre antes dele; apagar
+  /// o "-F" apaga o último dígito.
+  static TextInputFormatter crefitoNumberFormatter() =>
+      TextInputFormatter.withFunction((oldValue, newValue) {
+        var digits = digitsOnly(newValue.text);
+        if (digits.length > 6) digits = digits.substring(0, 6);
+        final oldDigits = digitsOnly(oldValue.text);
+        if (digits == oldDigits &&
+            newValue.text.length < oldValue.text.length &&
+            digits.isNotEmpty) {
+          digits = digits.substring(0, digits.length - 1);
+        }
+        final text = '$digits-F';
+        return TextEditingValue(
+          text: text,
+          selection: TextSelection.collapsed(offset: digits.length),
+        );
+      });
+
+  static bool isCrefito(String value) => _crefitoPattern.hasMatch(value.trim());
+
+  static String buildCrefito(String region, String number) =>
+      'CREFITO-${int.tryParse(region) ?? region}/${digitsOnly(number)}-F';
+
+  /// Separa um CREFITO salvo em região e número; null se estiver fora do padrão.
+  static ({String region, String number})? parseCrefito(String value) {
+    final match = _crefitoPattern.firstMatch(value.trim().toUpperCase());
+    if (match == null) return null;
+    return (region: match.group(1)!, number: match.group(2)!);
+  }
+
   /// Data digitada no formato DD/MM/AAAA, sem seletor de calendário.
   static MaskedInputFormatter dataFormatter() => MaskedInputFormatter(data);
 

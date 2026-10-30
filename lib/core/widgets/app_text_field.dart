@@ -27,6 +27,9 @@ class AppTextField extends StatelessWidget {
     this.readOnly = false,
     this.onTap,
     this.autovalidateMode,
+    this.prefixText,
+    this.highlightError = false,
+    this.suffixText,
     super.key,
   });
 
@@ -53,6 +56,14 @@ class AppTextField extends StatelessWidget {
   /// mostrar o erro enquanto o usuário digita.
   final AutovalidateMode? autovalidateMode;
 
+  /// Texto fixo antes e depois do valor (ex.: "CREFITO-" e "-F").
+  final String? prefixText;
+
+  /// Pinta a borda de vermelho sem o texto de erro padrão, para telas que
+  /// mostram o aviso do próprio jeito (ex.: centralizado, sem espaço extra).
+  final bool highlightError;
+  final String? suffixText;
+
   @override
   Widget build(BuildContext context) {
     return TextFormField(
@@ -73,10 +84,43 @@ class AppTextField extends StatelessWidget {
       decoration: InputDecoration(
         labelText: label,
         hintText: hint,
+        // Com o rótulo sempre acima, os textos fixos ficam sempre visíveis
+        // e não disputam espaço com o rótulo.
+        floatingLabelBehavior: prefixText != null || suffixText != null
+            ? FloatingLabelBehavior.always
+            : null,
         prefixIcon: prefixIcon == null ? null : Icon(prefixIcon),
         suffixIcon: suffixIcon,
+        prefixText: prefixText,
+        suffixText: suffixText,
+        // Desabilitado, o texto fixo fica opaco como o valor do campo.
+        prefixStyle: _fixedTextStyle(context),
+        suffixStyle: _fixedTextStyle(context),
         errorText: errorText,
+        errorMaxLines: 2,
+        enabledBorder: highlightError ? _errorBorder(context, 1) : null,
+        focusedBorder: highlightError ? _errorBorder(context, 2) : null,
       ),
     );
+  }
+
+  TextStyle? _fixedTextStyle(BuildContext context) {
+    final style = Theme.of(context).textTheme.bodyLarge;
+    if (enabled) return style;
+    return style?.copyWith(
+      color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.38),
+    );
+  }
+
+  static InputBorder _errorBorder(BuildContext context, double width) {
+    final error = Theme.of(context).colorScheme.error;
+    final base = Theme.of(context).inputDecorationTheme.errorBorder;
+    return base is OutlineInputBorder
+        ? base.copyWith(
+            borderSide: BorderSide(color: error, width: width),
+          )
+        : OutlineInputBorder(
+            borderSide: BorderSide(color: error, width: width),
+          );
   }
 }

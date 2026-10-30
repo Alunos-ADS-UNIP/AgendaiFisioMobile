@@ -13,6 +13,10 @@ class _FakeApi implements ProfessionalProfileApi {
   String? specialtyId;
 
   @override
+  Future<({String cpf, DateTime? birthDate})?> fetchOwnPrivateData() async =>
+      null;
+
+  @override
   Future<ProfessionalProfile> fetchOwnProfile() async =>
       const ProfessionalProfile(
         id: 'p1',

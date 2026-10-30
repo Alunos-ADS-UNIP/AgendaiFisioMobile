@@ -7,9 +7,9 @@ import '../../domain/professional_profile.dart';
 
 enum ProfessionalProfileStatus { loading, content, forbidden, error }
 
-/// Mantém dados privados enviados apenas durante a sessão atual. Como não há
-/// GET /api/profissional/me privado, CPF e nascimento nunca são inventados a
-/// partir do detalhe público.
+/// CPF e nascimento vêm de GET /api/profissional/me (só o próprio profissional
+/// lê). Se a rota não responder, valem os dados enviados na sessão atual; nunca
+/// são inventados a partir do detalhe público.
 class ProfessionalProfileController extends ChangeNotifier {
   ProfessionalProfileController(this._api);
 
@@ -57,6 +57,12 @@ class ProfessionalProfileController extends ChangeNotifier {
         _cpfInSession = null;
         _birthDateInSession = null;
       }
+      final private = await _api.fetchOwnPrivateData();
+      if (generation != _generation) return;
+      if (private != null && private.cpf.length == 11) {
+        _cpfInSession = private.cpf;
+      }
+      if (private?.birthDate != null) _birthDateInSession = private!.birthDate;
       _profile = loaded;
       _status = ProfessionalProfileStatus.content;
     } on ProfessionalAccessException {

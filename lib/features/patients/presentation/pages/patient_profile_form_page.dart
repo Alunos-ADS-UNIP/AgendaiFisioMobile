@@ -111,6 +111,12 @@ class _PatientProfileFormPageState extends State<PatientProfileFormPage> {
     text: widget.currentPatient.endereco.estado,
   );
 
+  /// CPF e data de nascimento já cadastrados não podem ser alterados: ficam
+  /// bloqueados na edição e só são preenchidos no primeiro acesso.
+  late final bool _identidadeBloqueada =
+      InputMasks.digitsOnly(widget.currentPatient.cpf).length == 11 &&
+      widget.currentPatient.dataNascimento != null;
+
   late DateTime? _dataNascimentoSelecionada =
       widget.currentPatient.dataNascimento;
 
@@ -299,6 +305,7 @@ class _PatientProfileFormPageState extends State<PatientProfileFormPage> {
                 AppTextField(
                   label: 'CPF',
                   controller: _cpfController,
+                  enabled: !_identidadeBloqueada,
                   keyboardType: TextInputType.number,
                   textInputAction: TextInputAction.next,
                   inputFormatters: [InputMasks.cpfFormatter()],
@@ -329,6 +336,7 @@ class _PatientProfileFormPageState extends State<PatientProfileFormPage> {
                 AppTextField(
                   label: 'Data de nascimento',
                   controller: _dataNascimentoController,
+                  enabled: !_identidadeBloqueada,
                   keyboardType: TextInputType.number,
                   textInputAction: TextInputAction.next,
                   inputFormatters: [InputMasks.dataFormatter()],
