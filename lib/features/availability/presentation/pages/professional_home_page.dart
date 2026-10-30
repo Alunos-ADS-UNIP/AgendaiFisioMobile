@@ -1,40 +1,34 @@
 import 'package:flutter/material.dart';
 
-import '../../../../core/theme/app_colors.dart';
+import '../../../../core/utils/person_name.dart';
 import '../../../../core/theme/app_spacing.dart';
 import '../../../../core/widgets/app_loading_skeleton.dart';
-import '../../../../core/widgets/app_secondary_button.dart';
 import '../../../../core/widgets/appointment_card.dart';
 import '../../../../core/widgets/empty_state.dart';
 import '../../../../core/widgets/error_state.dart';
+import '../../../../core/widgets/today_card.dart';
 import '../../../appointments/domain/appointment.dart';
 import '../../../appointments/domain/appointment_repository.dart';
-import '../../../appointments/presentation/pages/appointments_page.dart';
 import '../../domain/professional_day_summary.dart';
 
-/// Tela inicial do fisioterapeuta: resumo do dia, próximas consultas e atalhos.
+/// Início do fisioterapeuta: resumo do dia e próximas consultas.
 ///
 /// Usa apenas a rota de agenda que já existe (GET /api/agendamento), pelo
-/// [AppointmentRepository]. Atalhos cujas telas ainda não existem recebem
-/// `null` e aparecem desativados com o texto "em breve".
+/// [AppointmentRepository]. A navegação entre áreas fica no menu inferior da
+/// [ProfessionalAreaPage]; tocar numa consulta chama [onOpenAgenda].
+/// O fisioterapeuta não agenda consultas: esta tela só consulta.
 class ProfessionalHomePage extends StatefulWidget {
   const ProfessionalHomePage({
     required this.repository,
     this.professionalName,
-    this.onOpenPatients,
-    this.onOpenSchedule,
-    this.onOpenProfile,
-    this.onLogout,
+    this.onOpenAgenda,
     this.now,
     super.key,
   });
 
   final AppointmentRepository repository;
   final String? professionalName;
-  final VoidCallback? onOpenPatients;
-  final VoidCallback? onOpenSchedule;
-  final VoidCallback? onOpenProfile;
-  final VoidCallback? onLogout;
+  final VoidCallback? onOpenAgenda;
 
   /// Relógio injetável para testes. Em produção fica nulo (usa DateTime.now()).
   final DateTime Function()? now;
@@ -61,17 +55,7 @@ class _ProfessionalHomePageState extends State<ProfessionalHomePage> {
 
   @override
   Widget build(BuildContext context) => Scaffold(
-    appBar: AppBar(
-      title: const Text('AgendaiFisio'),
-      actions: [
-        if (widget.onLogout != null)
-          IconButton(
-            onPressed: widget.onLogout,
-            tooltip: 'Sair',
-            icon: const Icon(Icons.logout),
-          ),
-      ],
-    ),
+    appBar: AppBar(title: const Text('AgendaiFisio')),
     body: RefreshIndicator(
       onRefresh: _refresh,
       child: FutureBuilder<List<Appointment>>(
@@ -81,7 +65,7 @@ class _ProfessionalHomePageState extends State<ProfessionalHomePage> {
           padding: const EdgeInsets.all(AppSpacing.md),
           children: [
             Text(
-              'Olá${widget.professionalName?.isNotEmpty == true ? ', ${widget.professionalName}' : ''}!',
+              'Olá${shortPersonName(widget.professionalName).isEmpty ? '' : ', ${shortPersonName(widget.professionalName)}'}!',
               style: Theme.of(context).textTheme.headlineMedium,
             ),
             const SizedBox(height: AppSpacing.xs),
@@ -91,32 +75,6 @@ class _ProfessionalHomePageState extends State<ProfessionalHomePage> {
             ),
             const SizedBox(height: AppSpacing.lg),
             ..._content(context, snapshot),
-            const SizedBox(height: AppSpacing.lg),
-            Text('Atalhos', style: Theme.of(context).textTheme.titleLarge),
-            const SizedBox(height: AppSpacing.sm),
-            AppSecondaryButton(
-              onPressed: _openAgenda,
-              icon: Icons.calendar_month_outlined,
-              label: 'Agenda',
-            ),
-            const SizedBox(height: AppSpacing.sm),
-            _shortcut(
-              label: 'Pacientes',
-              icon: Icons.groups_outlined,
-              onPressed: widget.onOpenPatients,
-            ),
-            const SizedBox(height: AppSpacing.sm),
-            _shortcut(
-              label: 'Grade de horários',
-              icon: Icons.schedule_outlined,
-              onPressed: widget.onOpenSchedule,
-            ),
-            const SizedBox(height: AppSpacing.sm),
-            _shortcut(
-              label: 'Perfil',
-              icon: Icons.person_outline,
-              onPressed: widget.onOpenProfile,
-            ),
           ],
         ),
       ),
@@ -146,17 +104,14 @@ class _ProfessionalHomePageState extends State<ProfessionalHomePage> {
     final loc = MaterialLocalizations.of(context);
 
     return [
-      _TodayCard(count: summary.todayCount),
+      TodayCard(count: summary.todayCount),
       const SizedBox(height: AppSpacing.lg),
-      Text(
-        'Próximas consultas',
-        style: Theme.of(context).textTheme.titleLarge,
-      ),
+      Text('Próximas consultas', style: Theme.of(context).textTheme.titleLarge),
       const SizedBox(height: AppSpacing.sm),
       if (summary.upcoming.isEmpty)
         const EmptyState(
-          title: 'Nenhuma consulta próxima',
-          message: 'Quando houver consultas agendadas, elas aparecem aqui.',
+          title: 'Nenhuma consulta encontrada',
+          message: 'Quando agendadas,suas próximas consultas aparecerão aqui.',
           icon: Icons.event_available_outlined,
         )
       else
@@ -175,76 +130,9 @@ class _ProfessionalHomePageState extends State<ProfessionalHomePage> {
                   ? 'Fisioterapia'
                   : item.specialtyName,
               status: item.status,
-              onTap: _openAgenda,
+              onTap: widget.onOpenAgenda,
             ),
           ),
     ];
-  }
-
-  /// Atalho ainda sem tela: desativado e com texto explícito, nunca só cor.
-  Widget _shortcut({
-    required String label,
-    required IconData icon,
-    required VoidCallback? onPressed,
-  }) => AppSecondaryButton(
-    onPressed: onPressed,
-    icon: icon,
-    label: onPressed == null ? '$label (em breve)' : label,
-  );
-
-  Future<void> _openAgenda() async {
-    await Navigator.of(context).push<void>(
-      MaterialPageRoute(
-        builder: (_) => AppointmentsPage(
-          repository: widget.repository,
-          title: 'Agenda',
-        ),
-      ),
-    );
-    if (mounted) _refresh();
-  }
-}
-
-class _TodayCard extends StatelessWidget {
-  const _TodayCard({required this.count});
-
-  final int count;
-
-  @override
-  Widget build(BuildContext context) {
-    final text = switch (count) {
-      0 => 'Nenhuma consulta hoje',
-      1 => '1 consulta hoje',
-      _ => '$count consultas hoje',
-    };
-    return Semantics(
-      container: true,
-      label: 'Resumo do dia: $text',
-      child: ExcludeSemantics(
-        child: DecoratedBox(
-          decoration: BoxDecoration(
-            color: AppColors.primaryLight,
-            borderRadius: BorderRadius.circular(16),
-          ),
-          child: Padding(
-            padding: const EdgeInsets.all(AppSpacing.md),
-            child: Row(
-              children: [
-                const Icon(Icons.today_outlined, color: AppColors.primaryDark),
-                const SizedBox(width: AppSpacing.sm),
-                Flexible(
-                  child: Text(
-                    text,
-                    style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                      color: AppColors.primaryDark,
-                    ),
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ),
-      ),
-    );
   }
 }

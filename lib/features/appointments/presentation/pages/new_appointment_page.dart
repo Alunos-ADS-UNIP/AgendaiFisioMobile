@@ -1,10 +1,14 @@
 import 'package:flutter/material.dart';
 
+import '../../../../core/widgets/month_calendar_picker.dart';
+import '../../../../core/widgets/time_slot_picker_sheet.dart';
 import '../../../../core/theme/app_spacing.dart';
 import '../../../../core/widgets/app_primary_button.dart';
 import '../../../../core/widgets/app_secondary_button.dart';
 import '../../../../core/widgets/app_text_field.dart';
+import '../../../../core/widgets/empty_state.dart';
 import '../../../../core/widgets/error_state.dart';
+import '../../../../core/widgets/info_card.dart';
 import '../../../../core/widgets/professional_card.dart';
 import '../../domain/appointment.dart';
 import '../../domain/appointment_failure.dart';
@@ -13,6 +17,11 @@ import '../../domain/professional.dart';
 import '../../domain/specialty.dart';
 import '../widgets/appointment_specialty_picker_sheet.dart';
 import 'appointment_created_page.dart';
+import 'professional_info_page.dart';
+
+/// Resultado de [NewAppointmentPage] quando o paciente escolhe completar o
+/// cadastro antes de agendar. A área do paciente então abre a aba Perfil.
+const completeProfileResult = 'completar-perfil';
 
 class NewAppointmentPage extends StatefulWidget {
   const NewAppointmentPage({
@@ -29,8 +38,6 @@ class NewAppointmentPage extends StatefulWidget {
 }
 
 class _NewAppointmentPageState extends State<NewAppointmentPage> {
-  static const _availableHours = [9, 10, 11, 12, 13, 14, 15, 16, 17, 18];
-
   final _notesController = TextEditingController();
   List<Specialty> _specialties = const [];
   List<Professional> _professionals = const [];
@@ -39,10 +46,29 @@ class _NewAppointmentPageState extends State<NewAppointmentPage> {
   DateTime? _day;
   TimeOfDay? _time;
   bool _loading = true;
+  List<String> _missingProfileFields = const [];
   bool _loadingProfessionals = false;
   bool _submitting = false;
   int _step = 0;
   String? _error;
+  final Map<String, Future<String>> _emailCache = {};
+
+  /// E-mail de contato do fisioterapeuta, buscado uma vez por profissional.
+  Future<String> _emailFor(String? professionalId) {
+    if (professionalId == null) return Future.value('');
+    return _emailCache.putIfAbsent(professionalId, () async {
+      final repository = widget.repository;
+      final directory = repository is ProfessionalContactDirectory
+          ? repository as ProfessionalContactDirectory
+          : null;
+      if (directory == null) return '';
+      try {
+        return await directory.fetchProfessionalEmail(professionalId);
+      } catch (_) {
+        return '';
+      }
+    });
+  }
 
   @override
   void initState() {
@@ -56,7 +82,54 @@ class _NewAppointmentPageState extends State<NewAppointmentPage> {
     super.dispose();
   }
 
+  /// Abre o perfil do profissional. Se o paciente seguir com o agendamento,
+  /// o profissional é escolhido e a etapa avança.
+  Future<void> _openProfessionalInfo(Professional item) async {
+    final follow = await Navigator.of(context).push<bool>(
+      MaterialPageRoute(
+        builder: (_) => ProfessionalInfoPage(
+          repository: widget.repository,
+          professional: item,
+          specialtyName: item.specialtyName.isEmpty
+              ? (_specialty?.name ?? '')
+              : item.specialtyName,
+        ),
+      ),
+    );
+    if (follow != true || !mounted) return;
+    setState(() {
+      _professional = item;
+      _error = null;
+    });
+    await _continue();
+  }
+
   Future<void> _loadInitialData() async {
+    // Paciente sem cadastro completo não agenda: a tela só explica o que falta.
+    final repository = widget.repository;
+    final checker = repository is PatientProfileChecker
+        ? repository as PatientProfileChecker
+        : null;
+    if (checker != null) {
+      try {
+        final missing = await checker.missingPatientProfileFields();
+        if (!mounted) return;
+        if (missing.isNotEmpty) {
+          setState(() {
+            _missingProfileFields = missing;
+            _loading = false;
+          });
+          return;
+        }
+      } on AppointmentException catch (error) {
+        if (!mounted) return;
+        setState(() {
+          _error = error.userMessage;
+          _loading = false;
+        });
+        return;
+      }
+    }
     try {
       final specialties = await widget.repository.fetchSpecialties();
       Professional? professional;
@@ -137,34 +210,18 @@ class _NewAppointmentPageState extends State<NewAppointmentPage> {
     }
   }
 
-  Future<void> _selectDay() async {
-    final now = DateTime.now();
-    final picked = await showDatePicker(
-      context: context,
-      initialDate: _day ?? now.add(const Duration(days: 1)),
-      firstDate: DateTime(now.year, now.month, now.day),
-      lastDate: DateTime(now.year + 2, 12, 31),
-      helpText: 'Escolha o dia da consulta',
+  Future<void> _selectTime() async {
+    final picked = await TimeSlotPickerSheet.show(
+      context,
+      initial: _time ?? const TimeOfDay(hour: 9, minute: 0),
+      title: 'Escolha o horário',
     );
     if (picked != null && mounted) {
       setState(() {
-        _day = picked;
+        _time = picked;
         _error = null;
       });
     }
-  }
-
-  void _selectTime(int hour) {
-    setState(() {
-      _time = TimeOfDay(hour: hour, minute: 0);
-      _error = null;
-    });
-  }
-
-  bool _isHourInFuture(int hour) {
-    if (_day == null) return false;
-    final dateTime = DateTime(_day!.year, _day!.month, _day!.day, hour);
-    return dateTime.isAfter(DateTime.now());
   }
 
   DateTime? get _selectedDateTime {
@@ -192,7 +249,7 @@ class _NewAppointmentPageState extends State<NewAppointmentPage> {
       return;
     }
     if (_notesController.text.trim().length > 1000) {
-      setState(() => _error = 'As observações devem ter até 1000 caracteres.');
+      setState(() => _error = 'Os sintomas devem ter até 1000 caracteres.');
       return;
     }
     setState(() {
@@ -241,6 +298,11 @@ class _NewAppointmentPageState extends State<NewAppointmentPage> {
     }
   }
 
+  String _crefitoText() {
+    final crefito = _professional?.crefito ?? '';
+    return crefito.isEmpty ? '—' : crefito;
+  }
+
   @override
   Widget build(BuildContext context) => Scaffold(
     appBar: AppBar(
@@ -260,6 +322,15 @@ class _NewAppointmentPageState extends State<NewAppointmentPage> {
     ),
     body: _loading
         ? const Center(child: CircularProgressIndicator())
+        : _missingProfileFields.isNotEmpty
+        ? EmptyState(
+            title: 'Complete seu perfil',
+            message:
+                'Para agendar, falta preencher: ${_missingProfileFields.join(', ')}.',
+            icon: Icons.person_outline,
+            actionLabel: 'Completar perfil',
+            onAction: () => Navigator.pop(context, completeProfileResult),
+          )
         : _error != null && _specialties.isEmpty
         ? ErrorState(message: _error!, onRetry: _loadInitialData)
         : SafeArea(
@@ -388,6 +459,7 @@ class _NewAppointmentPageState extends State<NewAppointmentPage> {
                   : item.specialtyName,
               crefito: item.crefito,
               isActive: item.isActive,
+              onInfo: () => _openProfessionalInfo(item),
               onTap: () => setState(() {
                 _professional = item;
                 _error = null;
@@ -401,60 +473,65 @@ class _NewAppointmentPageState extends State<NewAppointmentPage> {
   Widget _reviewStep(BuildContext context) => Column(
     crossAxisAlignment: CrossAxisAlignment.stretch,
     children: [
-      Text('Revise os dados', style: Theme.of(context).textTheme.titleLarge),
-      const SizedBox(height: AppSpacing.sm),
-      ListTile(
-        leading: const Icon(Icons.spa_outlined),
-        title: Text(_specialty?.name ?? 'Especialidade'),
-      ),
-      ListTile(
-        leading: const Icon(Icons.person_outline),
-        title: Text(_professional?.name ?? 'Profissional'),
-        subtitle: Text(_professional?.crefito ?? ''),
-      ),
-      AppSecondaryButton(
-        onPressed: _selectDay,
-        icon: Icons.calendar_today_outlined,
-        label: _day == null
-            ? 'Selecionar data'
-            : MaterialLocalizations.of(context).formatMediumDate(_day!),
+      Text(
+        'Dados do profissional',
+        style: Theme.of(context).textTheme.titleLarge,
       ),
       const SizedBox(height: AppSpacing.md),
-      Text('Escolha o horário', style: Theme.of(context).textTheme.titleMedium),
-      const SizedBox(height: AppSpacing.xs),
-      Text(
-        _day == null
-            ? 'Selecione uma data para liberar os horários.'
-            : 'As consultas começam sempre em horas inteiras.',
-        style: Theme.of(context).textTheme.bodySmall,
+      InfoLine(
+        icon: Icons.person_outline,
+        label: 'Fisioterapeuta',
+        value: _professional?.name ?? '—',
       ),
+      const SizedBox(height: AppSpacing.md),
+      InfoLine(
+        icon: Icons.medical_services_outlined,
+        label: 'Especialização',
+        value: _specialty?.name ?? '—',
+      ),
+      const SizedBox(height: AppSpacing.md),
+      InfoLine(
+        icon: Icons.badge_outlined,
+        label: 'CREFITO',
+        value: _crefitoText(),
+      ),
+      const SizedBox(height: AppSpacing.md),
+      FutureBuilder<String>(
+        future: _emailFor(_professional?.id),
+        builder: (context, snapshot) => InfoLine(
+          icon: Icons.email_outlined,
+          label: 'E-mail para contato',
+          value: (snapshot.data ?? '').isEmpty ? '—' : snapshot.data!,
+        ),
+      ),
+      if ((_professional?.bio ?? '').trim().isNotEmpty) ...[
+        const SizedBox(height: AppSpacing.md),
+        InfoLine(
+          icon: Icons.description_outlined,
+          label: 'Descrição',
+          value: _professional!.bio,
+        ),
+      ],
+      const SizedBox(height: AppSpacing.lg),
+      Text('Selecione o dia', style: Theme.of(context).textTheme.titleLarge),
       const SizedBox(height: AppSpacing.sm),
-      Wrap(
-        spacing: AppSpacing.xs,
-        runSpacing: AppSpacing.xs,
-        children: [
-          for (final hour in _availableHours)
-            Semantics(
-              button: true,
-              selected: _time?.hour == hour,
-              label: 'Horário ${hour.toString().padLeft(2, '0')}:00',
-              child: ChoiceChip(
-                label: Text('${hour.toString().padLeft(2, '0')}:00'),
-                selected: _time?.hour == hour,
-                showCheckmark: true,
-                onSelected: _isHourInFuture(hour)
-                    ? (selected) {
-                        if (selected) _selectTime(hour);
-                      }
-                    : null,
-              ),
-            ),
-        ],
+      MonthCalendarPicker(
+        selected: _day,
+        onChanged: (day) => setState(() {
+          _day = day;
+          _error = null;
+        }),
+      ),
+      const SizedBox(height: AppSpacing.xs),
+      AppSecondaryButton(
+        onPressed: _selectTime,
+        icon: Icons.schedule_outlined,
+        label: _time == null ? 'Selecionar horário' : _time!.format(context),
       ),
       const SizedBox(height: AppSpacing.sm),
       AppTextField(
-        label: 'Observações (opcional)',
-        hint: 'Conte algo que o profissional precisa saber',
+        label: 'Sintomas (opcional)',
+        hint: 'Descreva o que você está sentindo',
         controller: _notesController,
         maxLines: 4,
         textInputAction: TextInputAction.newline,

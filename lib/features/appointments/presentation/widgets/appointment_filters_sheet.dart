@@ -13,11 +13,16 @@ class AppointmentFiltersSheet extends StatefulWidget {
   const AppointmentFiltersSheet({
     required this.repository,
     required this.initialFilters,
+    this.professionalView = false,
     super.key,
   });
 
   final AppointmentRepository repository;
   final AppointmentFilters initialFilters;
+
+  /// Visão do fisioterapeuta: a agenda já é só dele, então não há lista de
+  /// profissionais. Os filtros viram atalhos de dia (Hoje, Amanhã) e de status.
+  final bool professionalView;
 
   @override
   State<AppointmentFiltersSheet> createState() =>
@@ -45,7 +50,11 @@ class _AppointmentFiltersSheetState extends State<AppointmentFiltersSheet> {
     _day = widget.initialFilters.day;
     _professionalId = widget.initialFilters.professionalId;
     _status = widget.initialFilters.status;
-    _loadProfessionals();
+    if (widget.professionalView) {
+      _loading = false;
+    } else {
+      _loadProfessionals();
+    }
   }
 
   Future<void> _loadProfessionals() async {
@@ -68,6 +77,12 @@ class _AppointmentFiltersSheetState extends State<AppointmentFiltersSheet> {
     }
   }
 
+  static DateTime _dateOnly(DateTime value) =>
+      DateTime(value.year, value.month, value.day);
+
+  bool _isSameDay(DateTime? a, DateTime b) =>
+      a != null && _dateOnly(a) == _dateOnly(b);
+
   @override
   Widget build(BuildContext context) {
     return SafeArea(
@@ -88,73 +103,82 @@ class _AppointmentFiltersSheetState extends State<AppointmentFiltersSheet> {
                 style: Theme.of(context).textTheme.titleLarge,
               ),
               const SizedBox(height: AppSpacing.md),
-              AppSecondaryButton(
-                onPressed: _pickDay,
-                icon: Icons.calendar_today_outlined,
-                label: _day == null
-                    ? 'Qualquer data'
-                    : MaterialLocalizations.of(context).formatMediumDate(_day!),
-              ),
-              const SizedBox(height: AppSpacing.sm),
-              DropdownButtonFormField<String?>(
-                initialValue: _professionalId,
-                isExpanded: true,
-                decoration: const InputDecoration(labelText: 'Profissional'),
-                items: [
-                  const DropdownMenuItem<String?>(
-                    value: null,
-                    child: Text('Todos'),
-                  ),
-                  if (_professionalId != null &&
-                      !_professionals.any((item) => item.id == _professionalId))
-                    DropdownMenuItem<String?>(
-                      value: _professionalId,
-                      child: const Text('Profissional selecionado'),
+              if (widget.professionalView) ...[
+                _periodChips(context),
+                const SizedBox(height: AppSpacing.md),
+                _statusChips(context),
+              ] else ...[
+                AppSecondaryButton(
+                  onPressed: _pickDay,
+                  icon: Icons.calendar_today_outlined,
+                  label: _day == null
+                      ? 'Qualquer data'
+                      : MaterialLocalizations.of(context)
+                            .formatMediumDate(_day!),
+                ),
+                const SizedBox(height: AppSpacing.sm),
+                DropdownButtonFormField<String?>(
+                  initialValue: _professionalId,
+                  isExpanded: true,
+                  decoration: const InputDecoration(labelText: 'Profissional'),
+                  items: [
+                    const DropdownMenuItem<String?>(
+                      value: null,
+                      child: Text('Todos'),
                     ),
-                  ..._professionals.map(
-                    (professional) => DropdownMenuItem<String?>(
-                      value: professional.id,
-                      child: Text(
-                        professional.name,
-                        overflow: TextOverflow.ellipsis,
+                    if (_professionalId != null &&
+                        !_professionals.any(
+                          (item) => item.id == _professionalId,
+                        ))
+                      DropdownMenuItem<String?>(
+                        value: _professionalId,
+                        child: const Text('Profissional selecionado'),
+                      ),
+                    ..._professionals.map(
+                      (professional) => DropdownMenuItem<String?>(
+                        value: professional.id,
+                        child: Text(
+                          professional.name,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ),
+                    ),
+                  ],
+                  onChanged: _loading
+                      ? null
+                      : (value) => setState(() => _professionalId = value),
+                ),
+                if (_loading) const LinearProgressIndicator(),
+                if (_professionalsError != null)
+                  Padding(
+                    padding: const EdgeInsets.only(top: AppSpacing.xs),
+                    child: Text(
+                      _professionalsError!,
+                      style: TextStyle(
+                        color: Theme.of(context).colorScheme.error,
                       ),
                     ),
                   ),
-                ],
-                onChanged: _loading
-                    ? null
-                    : (value) => setState(() => _professionalId = value),
-              ),
-              if (_loading) const LinearProgressIndicator(),
-              if (_professionalsError != null)
-                Padding(
-                  padding: const EdgeInsets.only(top: AppSpacing.xs),
-                  child: Text(
-                    _professionalsError!,
-                    style: TextStyle(
-                      color: Theme.of(context).colorScheme.error,
+                const SizedBox(height: AppSpacing.sm),
+                DropdownButtonFormField<AppointmentStatus?>(
+                  initialValue: _status,
+                  isExpanded: true,
+                  decoration: const InputDecoration(labelText: 'Status'),
+                  items: [
+                    const DropdownMenuItem<AppointmentStatus?>(
+                      value: null,
+                      child: Text('Todos'),
                     ),
-                  ),
+                    ..._supportedStatuses.map(
+                      (status) => DropdownMenuItem<AppointmentStatus?>(
+                        value: status,
+                        child: Text(_statusLabel(status)),
+                      ),
+                    ),
+                  ],
+                  onChanged: (value) => setState(() => _status = value),
                 ),
-              const SizedBox(height: AppSpacing.sm),
-              DropdownButtonFormField<AppointmentStatus?>(
-                initialValue: _status,
-                isExpanded: true,
-                decoration: const InputDecoration(labelText: 'Status'),
-                items: [
-                  const DropdownMenuItem<AppointmentStatus?>(
-                    value: null,
-                    child: Text('Todos'),
-                  ),
-                  ..._supportedStatuses.map(
-                    (status) => DropdownMenuItem<AppointmentStatus?>(
-                      value: status,
-                      child: Text(_statusLabel(status)),
-                    ),
-                  ),
-                ],
-                onChanged: (value) => setState(() => _status = value),
-              ),
+              ],
               const SizedBox(height: AppSpacing.md),
               AppPrimaryButton(
                 label: 'Aplicar filtros',
@@ -167,18 +191,85 @@ class _AppointmentFiltersSheetState extends State<AppointmentFiltersSheet> {
                   ),
                 ),
               ),
-              const SizedBox(height: AppSpacing.xs),
-              AppSecondaryButton(
-                label: 'Limpar filtros',
-                onPressed: () =>
-                    Navigator.pop(context, const AppointmentFilters()),
-              ),
+              // Na visão do profissional, "Todas" e "Todos" já limpam os filtros.
+              if (!widget.professionalView) ...[
+                const SizedBox(height: AppSpacing.xs),
+                AppSecondaryButton(
+                  label: 'Limpar filtros',
+                  onPressed: () =>
+                      Navigator.pop(context, const AppointmentFilters()),
+                ),
+              ],
             ],
           ),
         ),
       ),
     );
   }
+
+  /// Atalhos de dia: Hoje, Amanhã, data escolhida e Todas as datas.
+  Widget _periodChips(BuildContext context) {
+    final today = _dateOnly(DateTime.now());
+    final tomorrow = today.add(const Duration(days: 1));
+    final isToday = _isSameDay(_day, today);
+    final isTomorrow = _isSameDay(_day, tomorrow);
+    final isCustom = _day != null && !isToday && !isTomorrow;
+    return _chipSection(context, 'Período', [
+      ChoiceChip(
+        label: const Text('Hoje'),
+        selected: isToday,
+        onSelected: (_) => setState(() => _day = today),
+      ),
+      ChoiceChip(
+        label: const Text('Amanhã'),
+        selected: isTomorrow,
+        onSelected: (_) => setState(() => _day = tomorrow),
+      ),
+      ChoiceChip(
+        avatar: const Icon(Icons.calendar_today_outlined, size: 18),
+        label: Text(
+          isCustom
+              ? MaterialLocalizations.of(context).formatMediumDate(_day!)
+              : 'Escolher data',
+        ),
+        selected: isCustom,
+        onSelected: (_) => _pickDay(),
+      ),
+      ChoiceChip(
+        label: const Text('Todas'),
+        selected: _day == null,
+        onSelected: (_) => setState(() => _day = null),
+      ),
+    ]);
+  }
+
+  Widget _statusChips(BuildContext context) => _chipSection(context, 'Status', [
+    ChoiceChip(
+      label: const Text('Todos'),
+      selected: _status == null,
+      onSelected: (_) => setState(() => _status = null),
+    ),
+    for (final status in _supportedStatuses)
+      ChoiceChip(
+        label: Text(_statusLabel(status)),
+        selected: _status == status,
+        onSelected: (_) => setState(() => _status = status),
+      ),
+  ]);
+
+  Widget _chipSection(BuildContext context, String title, List<Widget> chips) =>
+      Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(title, style: Theme.of(context).textTheme.titleSmall),
+          const SizedBox(height: AppSpacing.xs),
+          Wrap(
+            spacing: AppSpacing.xs,
+            runSpacing: AppSpacing.xs,
+            children: chips,
+          ),
+        ],
+      );
 
   Future<void> _pickDay() async {
     final now = DateTime.now();

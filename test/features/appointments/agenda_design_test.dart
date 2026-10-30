@@ -83,7 +83,8 @@ void main() {
       'fluxo completo cria e atualiza agenda em 360 px, texto ${scale}x',
       (tester) async {
         final repository = AppointmentPreviewRepository();
-        await _open(tester, AppointmentsPage(repository: repository), scale);
+        // O agendamento começa pela barra de navegação, já que a agenda não tem mais botão flutuante.
+        await _open(tester, PatientAreaPage(repository: repository), scale);
         await tester.tap(find.text('Agendar'));
         await tester.pumpAndSettle();
         _noOverflow(tester);
@@ -111,14 +112,21 @@ void main() {
         await tester.tap(find.text('Escolher data e horário'));
         await tester.pumpAndSettle();
         _noOverflow(tester);
-        await tester.ensureVisible(find.text('Selecionar data'));
-        await tester.tap(find.text('Selecionar data'));
+        // Amanhã: o horário padrão de hoje já pode ter passado.
+        final tomorrow = DateTime.now().add(const Duration(days: 1));
+        final dayCell = find.byKey(
+          ValueKey('dia-${tomorrow.year}-${tomorrow.month}-${tomorrow.day}'),
+        );
+        await tester.drag(find.byType(ListView).first, const Offset(0, -300));
+        await tester.pumpAndSettle();
+        await tester.tap(dayCell);
         await tester.pumpAndSettle();
         _noOverflow(tester);
-        await tester.tap(find.text('OK'));
+        await tester.ensureVisible(find.text('Selecionar horário'));
+        await tester.tap(find.text('Selecionar horário'));
         await tester.pumpAndSettle();
-        await tester.ensureVisible(find.text('09:00'));
-        await tester.tap(find.text('09:00'));
+        _noOverflow(tester);
+        await tester.tap(find.text('Confirmar'));
         await tester.pumpAndSettle();
         await tester.enterText(
           find.byType(TextFormField),
@@ -126,7 +134,11 @@ void main() {
         );
         await tester.pumpAndSettle();
         await _capture(tester, 'revisao-$scale');
-        await tester.ensureVisible(find.text('Confirmar agendamento'));
+        await tester.scrollUntilVisible(
+          find.text('Confirmar agendamento'),
+          200,
+          scrollable: find.byType(Scrollable).first,
+        );
         await tester.tap(find.text('Confirmar agendamento'));
         await tester.pumpAndSettle();
         _noOverflow(tester);

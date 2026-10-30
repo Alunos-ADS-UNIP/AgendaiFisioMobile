@@ -38,7 +38,9 @@ class AppointmentsController extends ChangeNotifier {
     try {
       final data = await repository.fetchAppointments(filters: _filters);
       if (generation != _generation) return;
-      _allItems = _filters.apply(data);
+      // Ordem cronológica (data e horário), independente da ordem que a API devolve.
+      _allItems = _filters.apply(data)
+        ..sort((a, b) => a.dateTime.compareTo(b.dateTime));
       _updatePageItems();
     } on AppointmentException catch (error) {
       if (generation != _generation) return;

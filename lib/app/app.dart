@@ -8,14 +8,15 @@ import '../core/config/api_config.dart';
 import '../core/network/api_client.dart';
 import '../core/theme/app_colors.dart';
 import '../core/theme/app_theme.dart';
+import '../core/widgets/error_state.dart';
 import '../development/component_catalog_page.dart';
 import '../features/appointments/data/appointment_api_repository.dart';
 import '../features/appointments/domain/appointment_repository.dart';
 import '../features/appointments/presentation/pages/patient_area_page.dart';
 import '../features/auth/data/auth_api.dart';
+import '../features/availability/data/appointment_block_availability_repository.dart';
 import '../features/availability/domain/availability_repository.dart';
-import '../features/availability/presentation/pages/professional_availability_page.dart';
-import '../features/availability/presentation/pages/professional_home_page.dart';
+import '../features/availability/presentation/pages/professional_area_page.dart';
 import '../features/auth/data/session_storage.dart';
 import '../features/auth/domain/auth_session.dart';
 import '../features/auth/presentation/controllers/session_controller.dart';
@@ -33,6 +34,7 @@ import '../features/patients/presentation/pages/patient_register_page.dart';
 import '../features/professional_profile/data/professional_profile_api.dart';
 import '../features/professional_profile/presentation/controllers/professional_profile_controller.dart';
 import '../features/professional_profile/presentation/controllers/professional_register_controller.dart';
+import '../features/professional_profile/presentation/pages/professional_profile_form_page.dart';
 import '../features/professional_profile/presentation/pages/professional_profile_page.dart';
 import '../features/professional_profile/presentation/pages/professional_register_page.dart';
 
@@ -182,7 +184,6 @@ class _AgendaiFisioAppState extends State<AgendaiFisioApp> {
         key: ValueKey(user.userId),
         api: _professionalProfileApi!,
         repository: _appointmentRepository!,
-        professionalName: user.email.split('@').first,
         onLogout: () => unawaited(session.logout()),
       );
     }
@@ -192,10 +193,13 @@ class _AgendaiFisioAppState extends State<AgendaiFisioApp> {
         onLogout: () => unawaited(session.logout()),
       );
     }
-    return PatientAreaPage(
+    return _PatientHome(
+      key: ValueKey('patient-${user.userId}'),
+      api: _patientApi!,
       repository: _appointmentRepository!,
       historyRepository: _historyRepository,
       patientName: user.email.split('@').first,
+      onLogout: () => unawaited(session.logout()),
       profileBuilder: (context) => _buildPatientProfile(context, session),
     );
   }
@@ -288,18 +292,115 @@ class _AgendaiFisioAppState extends State<AgendaiFisioApp> {
   }
 }
 
+/// Início do paciente. Enquanto o cadastro não estiver completo, mostra só o
+/// formulário de cadastro: o paciente não usa o aplicativo sem ele.
+class _PatientHome extends StatefulWidget {
+  const _PatientHome({
+    required this.api,
+    required this.repository,
+    required this.historyRepository,
+    required this.patientName,
+    required this.onLogout,
+    required this.profileBuilder,
+    super.key,
+  });
+
+  final PatientApi api;
+  final AppointmentRepository repository;
+  final HistoryRepository? historyRepository;
+  final String patientName;
+  final VoidCallback onLogout;
+  final WidgetBuilder profileBuilder;
+
+  @override
+  State<_PatientHome> createState() => _PatientHomeState();
+}
+
+class _PatientHomeState extends State<_PatientHome> {
+  late final PatientProfileController _controller = PatientProfileController(
+    widget.api,
+  )..load();
+  late final PatientProfileFormController _formController =
+      PatientProfileFormController(widget.api);
+  bool _logoutRequested = false;
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    _formController.dispose();
+    super.dispose();
+  }
+
+  void _logoutOnce() {
+    if (_logoutRequested) return;
+    _logoutRequested = true;
+    widget.onLogout();
+  }
+
+  @override
+  Widget build(BuildContext context) => ListenableBuilder(
+    listenable: _controller,
+    builder: (context, _) {
+      if (_controller.isSessionExpired) {
+        WidgetsBinding.instance.addPostFrameCallback((_) => _logoutOnce());
+      }
+      final patient = _controller.patient;
+      if (_controller.status == PatientProfileStatus.loading &&
+          patient == null) {
+        return const _SessionSplash();
+      }
+      if (patient == null) {
+        return Scaffold(
+          appBar: AppBar(
+            title: const Text('AgendaiFisio'),
+            actions: [
+              IconButton(
+                tooltip: 'Sair',
+                onPressed: _logoutOnce,
+                icon: const Icon(Icons.logout),
+              ),
+            ],
+          ),
+          body: SafeArea(
+            child: ErrorState(
+              message: _controller.errorMessage ?? 'Não foi possível carregar.',
+              onRetry: _controller.load,
+            ),
+          ),
+        );
+      }
+      if (!patient.isComplete) {
+        return PatientProfileFormPage(
+          controller: _formController,
+          currentPatient: patient,
+          onSaved: _controller.load,
+          onLogout: _logoutOnce,
+          title: 'Completar perfil',
+        );
+      }
+      return PatientAreaPage(
+        repository: widget.repository,
+        historyRepository: widget.historyRepository,
+        // Nome do cadastro (a saudação mostra só o primeiro e o último nome).
+        patientName: patient.nomeCompleto.trim().isEmpty
+            ? widget.patientName
+            : patient.nomeCompleto,
+        profileBuilder: widget.profileBuilder,
+      );
+    },
+  );
+}
+
 class _ProfessionalHome extends StatefulWidget {
   const _ProfessionalHome({
     required this.api,
     required this.repository,
-    required this.professionalName,
     required this.onLogout,
     super.key,
   });
 
   final ProfessionalProfileApi api;
   final AppointmentRepository repository;
-  final String professionalName;
   final VoidCallback onLogout;
 
   @override
@@ -308,11 +409,12 @@ class _ProfessionalHome extends StatefulWidget {
 
 class _ProfessionalHomeState extends State<_ProfessionalHome> {
   late final ProfessionalProfileController _controller;
+  bool _logoutRequested = false;
 
   @override
   void initState() {
     super.initState();
-    _controller = ProfessionalProfileController(widget.api);
+    _controller = ProfessionalProfileController(widget.api)..load();
   }
 
   @override
@@ -321,32 +423,86 @@ class _ProfessionalHomeState extends State<_ProfessionalHome> {
     super.dispose();
   }
 
+  void _logoutOnce() {
+    if (_logoutRequested) return;
+    _logoutRequested = true;
+    widget.onLogout();
+  }
+
+  /// Primeiro acesso: o perfil precisa ser completado antes da tela principal.
+  /// Depois de salvar, o controller deixa de estar pendente e a tela principal
+  /// aparece sozinha.
   @override
-  Widget build(BuildContext context) => ProfessionalHomePage(
-    repository: widget.repository,
-    professionalName: widget.professionalName,
-    onLogout: widget.onLogout,
-    // Backend ainda sem rotas de grade: o repositório "indisponível" faz a
-    // tela mostrar o estado honesto. Trocar pelo HTTP quando houver contrato.
-    onOpenSchedule: () => Navigator.of(context).push<void>(
-      MaterialPageRoute(
-        builder: (_) => const ProfessionalAvailabilityPage(
-          repository: UnavailableAvailabilityRepository(),
-        ),
-      ),
-    ),
-    onOpenProfile: () => Navigator.of(context).push<void>(
-      MaterialPageRoute(
-        builder: (_) => ProfessionalProfilePage(
+  Widget build(BuildContext context) => ListenableBuilder(
+    listenable: _controller,
+    builder: (context, _) {
+      final profile = _controller.profile;
+
+      if (_controller.isSessionExpired) {
+        WidgetsBinding.instance.addPostFrameCallback((_) => _logoutOnce());
+      }
+
+      // Só a primeira carga troca a tela; recargas posteriores (ex.: ao abrir
+      // o perfil) não derrubam a tela principal.
+      if (profile == null &&
+          _controller.status == ProfessionalProfileStatus.loading) {
+        return const _SessionSplash();
+      }
+      if (profile == null) {
+        return Scaffold(
+          appBar: AppBar(
+            title: const Text('AgendaiFisio'),
+            actions: [
+              IconButton(
+                tooltip: 'Sair',
+                onPressed: _logoutOnce,
+                icon: const Icon(Icons.logout),
+              ),
+            ],
+          ),
+          body: SafeArea(
+            child: _controller.status == ProfessionalProfileStatus.forbidden
+                ? const ErrorState(
+                    title: 'Acesso restrito',
+                    message: 'Esta área é exclusiva para profissionais.',
+                  )
+                : ErrorState(
+                    message:
+                        _controller.loadError ?? 'Não foi possível carregar.',
+                    onRetry: _controller.load,
+                  ),
+          ),
+        );
+      }
+      if (profile.isPendingCompletion) {
+        return ProfessionalProfileFormPage(
           controller: _controller,
-          onLogout: () {
-            // Fecha o perfil antes de encerrar a sessão.
-            Navigator.of(context).pop();
-            widget.onLogout();
-          },
+          onSaved: () {},
+          onSessionExpired: _logoutOnce,
+          onLogout: _logoutOnce,
+          specialtyRepository: widget.repository,
+        );
+      }
+      return ProfessionalAreaPage(
+        repository: widget.repository,
+        // Sem rota de grade no backend: a grade é guardada como agendamentos
+        // "Bloqueado" nos horários fora dos turnos.
+        availabilityRepository: switch (widget.repository) {
+          final ScheduleBlockGateway gateway =>
+            AppointmentBlockAvailabilityRepository(
+              gateway: gateway,
+              professionalId: profile.id,
+            ),
+          _ => const UnavailableAvailabilityRepository(),
+        },
+        professionalName: profile.name,
+        profileBuilder: (_) => ProfessionalProfilePage(
+          controller: _controller,
+          onLogout: widget.onLogout,
+          specialtyRepository: widget.repository,
         ),
-      ),
-    ),
+      );
+    },
   );
 }
 

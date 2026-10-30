@@ -21,12 +21,20 @@ class PatientProfileFormPage extends StatefulWidget {
     required this.currentPatient,
     required this.onSaved,
     this.cepLookup,
+    this.onLogout,
+    this.title = 'Editar perfil',
     super.key,
   });
 
   final PatientProfileFormController controller;
   final Patient currentPatient;
   final VoidCallback onSaved;
+
+  /// Quando informado, aparece o botão de sair na barra superior. Usado no
+  /// cadastro obrigatório, em que o paciente ainda não usa o aplicativo.
+  final VoidCallback? onLogout;
+
+  final String title;
 
   /// Consulta de CEP usada para preencher rua/bairro/cidade/estado. Por
   /// padrão usa o [ViaCepClient]; só é injetável para testes.
@@ -102,6 +110,12 @@ class _PatientProfileFormPageState extends State<PatientProfileFormPage> {
   late final _estadoController = TextEditingController(
     text: widget.currentPatient.endereco.estado,
   );
+
+  /// CPF e data de nascimento já cadastrados não podem ser alterados: ficam
+  /// bloqueados na edição e só são preenchidos no primeiro acesso.
+  late final bool _identidadeBloqueada =
+      InputMasks.digitsOnly(widget.currentPatient.cpf).length == 11 &&
+      widget.currentPatient.dataNascimento != null;
 
   late DateTime? _dataNascimentoSelecionada =
       widget.currentPatient.dataNascimento;
@@ -207,21 +221,15 @@ class _PatientProfileFormPageState extends State<PatientProfileFormPage> {
   static String _formatDate(DateTime date) =>
       '${date.day.toString().padLeft(2, '0')}/${date.month.toString().padLeft(2, '0')}/${date.year}';
 
-  Future<void> _pickDataNascimento() async {
-    final now = DateTime.now();
-    final picked = await showDatePicker(
-      context: context,
-      initialDate: _dataNascimentoSelecionada ?? DateTime(now.year - 30),
-      firstDate: DateTime(1900),
-      lastDate: now,
-      helpText: 'Data de nascimento',
-    );
-    if (picked != null) {
-      setState(() {
-        _dataNascimentoSelecionada = picked;
-        _dataNascimentoController.text = _formatDate(picked);
-      });
-    }
+  /// Lê a data digitada (DD/MM/AAAA). Vazia ou incompleta vira null.
+  void _onDataNascimentoChanged(String value) {
+    setState(() => _dataNascimentoSelecionada = InputMasks.parseDate(value));
+  }
+
+  String? _validateDataNascimento(String? value) {
+    final date = InputMasks.parseDate(value ?? '');
+    if (date == null) return 'Informe uma data válida.';
+    return null;
   }
 
   Future<void> _submit() async {
@@ -260,7 +268,17 @@ class _PatientProfileFormPageState extends State<PatientProfileFormPage> {
     final controller = widget.controller;
 
     return Scaffold(
-      appBar: AppBar(title: const Text('Editar perfil')),
+      appBar: AppBar(
+        title: Text(widget.title),
+        actions: [
+          if (widget.onLogout != null)
+            IconButton(
+              tooltip: 'Sair',
+              onPressed: widget.onLogout,
+              icon: const Icon(Icons.logout),
+            ),
+        ],
+      ),
       body: SafeArea(
         child: SingleChildScrollView(
           padding: const EdgeInsets.all(AppSpacing.lg),
@@ -287,6 +305,7 @@ class _PatientProfileFormPageState extends State<PatientProfileFormPage> {
                 AppTextField(
                   label: 'CPF',
                   controller: _cpfController,
+                  enabled: !_identidadeBloqueada,
                   keyboardType: TextInputType.number,
                   textInputAction: TextInputAction.next,
                   inputFormatters: [InputMasks.cpfFormatter()],
@@ -317,12 +336,14 @@ class _PatientProfileFormPageState extends State<PatientProfileFormPage> {
                 AppTextField(
                   label: 'Data de nascimento',
                   controller: _dataNascimentoController,
-                  readOnly: true,
-                  onTap: _pickDataNascimento,
-                  suffixIcon: const Icon(Icons.calendar_today_outlined),
-                  validator: (_) => _dataNascimentoSelecionada == null
-                      ? 'Selecione a data de nascimento.'
-                      : null,
+                  enabled: !_identidadeBloqueada,
+                  keyboardType: TextInputType.number,
+                  textInputAction: TextInputAction.next,
+                  inputFormatters: [InputMasks.dataFormatter()],
+                  onChanged: _onDataNascimentoChanged,
+                  hint: 'DD/MM/AAAA',
+                  autovalidateMode: AutovalidateMode.onUserInteraction,
+                  validator: _validateDataNascimento,
                 ),
                 _fieldError(controller, 'dataNascimento'),
                 const SizedBox(height: AppSpacing.md),

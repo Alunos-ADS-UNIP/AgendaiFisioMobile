@@ -12,6 +12,7 @@ class ProfessionalCard extends StatelessWidget {
     required this.isActive,
     this.isSelected = false,
     this.onTap,
+    this.onInfo,
     super.key,
   });
 
@@ -21,6 +22,9 @@ class ProfessionalCard extends StatelessWidget {
   final bool isActive;
   final bool isSelected;
   final VoidCallback? onTap;
+
+  /// Abre os detalhes do profissional, sem selecioná-lo.
+  final VoidCallback? onInfo;
 
   @override
   Widget build(BuildContext context) => Semantics(
@@ -111,6 +115,34 @@ class ProfessionalCard extends StatelessWidget {
                         ),
                       ),
                     ),
+                    if (onInfo != null) ...[
+                      const SizedBox(height: AppSpacing.sm),
+                      const Divider(height: 1),
+                      InkWell(
+                        onTap: onInfo,
+                        child: Padding(
+                          padding: const EdgeInsets.only(top: AppSpacing.sm),
+                          child: Row(
+                            children: [
+                              Expanded(
+                                child: Text(
+                                  'Ver perfil completo',
+                                  style: Theme.of(context).textTheme.labelLarge
+                                      ?.copyWith(
+                                        color: AppColors.primary,
+                                        fontWeight: FontWeight.w700,
+                                      ),
+                                ),
+                              ),
+                              const Icon(
+                                Icons.chevron_right,
+                                color: AppColors.primary,
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                    ],
                   ],
                 ),
               ),

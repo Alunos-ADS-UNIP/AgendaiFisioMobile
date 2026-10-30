@@ -54,8 +54,9 @@ void main() {
     await tester.tap(find.text('Entrar'));
     await tester.pumpAndSettle();
 
-    expect(find.text('Meu perfil profissional'), findsOneWidget);
-    expect(find.text('Complete seus dados profissionais para começar.'), findsOneWidget);
+    // Primeiro acesso: o perfil é completado antes da tela principal.
+    expect(find.text('Completar perfil'), findsOneWidget);
+    expect(find.text('Especialidade'), findsOneWidget);
     expect(find.byType(NavigationBar), findsNothing);
   });
 

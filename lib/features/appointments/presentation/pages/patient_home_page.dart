@@ -2,17 +2,15 @@ import 'package:flutter/material.dart';
 
 import '../../../../core/theme/app_spacing.dart';
 import '../../../../core/models/appointment_status.dart';
+import '../../../../core/utils/person_name.dart';
 import '../../../../core/widgets/appointment_card.dart';
-import '../../../../core/widgets/app_primary_button.dart';
-import '../../../../core/widgets/app_secondary_button.dart';
 import '../../../../core/widgets/empty_state.dart';
 import '../../../../core/widgets/error_state.dart';
+import '../../../../core/widgets/today_card.dart';
 import '../../domain/appointment.dart';
 import '../../domain/appointment_repository.dart';
 import 'appointments_page.dart';
-import 'new_appointment_page.dart';
 import '../../../history/domain/history_repository.dart' as history;
-import '../../../history/presentation/pages/patient_history_page.dart';
 
 class PatientHomePage extends StatefulWidget {
   const PatientHomePage({
@@ -57,12 +55,22 @@ class _PatientHomePageState extends State<PatientHomePage> {
                   )
                   .toList()
                 ..sort((a, b) => a.dateTime.compareTo(b.dateTime));
+          final now = DateTime.now();
+          final todayCount = (snapshot.data ?? const <Appointment>[])
+              .where(
+                (item) =>
+                    item.dateTime.year == now.year &&
+                    item.dateTime.month == now.month &&
+                    item.dateTime.day == now.day,
+              )
+              .where((item) => item.status != AppointmentStatus.cancelled)
+              .length;
           return ListView(
             physics: const AlwaysScrollableScrollPhysics(),
             padding: const EdgeInsets.all(AppSpacing.md),
             children: [
               Text(
-                'Olá${widget.patientName?.isNotEmpty == true ? ', ${widget.patientName}' : ''}!',
+                'Olá${shortPersonName(widget.patientName).isEmpty ? '' : ', ${shortPersonName(widget.patientName)}'}!',
                 style: Theme.of(context).textTheme.headlineMedium,
               ),
               const SizedBox(height: AppSpacing.xs),
@@ -71,6 +79,11 @@ class _PatientHomePageState extends State<PatientHomePage> {
                 style: Theme.of(context).textTheme.bodyLarge,
               ),
               const SizedBox(height: AppSpacing.lg),
+              if (snapshot.connectionState == ConnectionState.done &&
+                  !snapshot.hasError) ...[
+                TodayCard(count: todayCount),
+                const SizedBox(height: AppSpacing.lg),
+              ],
               if (snapshot.connectionState != ConnectionState.done)
                 const Padding(
                   padding: EdgeInsets.all(AppSpacing.xl),
@@ -83,14 +96,13 @@ class _PatientHomePageState extends State<PatientHomePage> {
                 )
               else if (futureAppointments.isEmpty)
                 const EmptyState(
-                  title: 'Você ainda não tem uma próxima consulta',
-                  message:
-                      'Agende com um profissional para ver sua consulta aqui.',
+                  title: 'Nenhuma consulta encontrada.',
+                  message: 'Quando agendadas,suas próximas consultas aparecerão aqui.',
                   icon: Icons.event_available_outlined,
                 )
               else ...[
                 Text(
-                  'Próxima consulta',
+                  'Próximas consultas',
                   style: Theme.of(context).textTheme.titleLarge,
                 ),
                 const SizedBox(height: AppSpacing.sm),
@@ -109,24 +121,6 @@ class _PatientHomePageState extends State<PatientHomePage> {
                   onTap: () => _openAgenda(),
                 ),
               ],
-              const SizedBox(height: AppSpacing.lg),
-              AppPrimaryButton(
-                onPressed: _newAppointment,
-                icon: Icons.add,
-                label: 'Agendar consulta',
-              ),
-              const SizedBox(height: AppSpacing.sm),
-              AppSecondaryButton(
-                onPressed: _openAgenda,
-                icon: Icons.calendar_month_outlined,
-                label: 'Minha agenda',
-              ),
-              const SizedBox(height: AppSpacing.sm),
-              AppSecondaryButton(
-                onPressed: _openHistory,
-                icon: Icons.history,
-                label: 'Histórico de consultas',
-              ),
             ],
           );
         },
@@ -141,38 +135,5 @@ class _PatientHomePageState extends State<PatientHomePage> {
       ),
     );
     if (mounted) _refresh();
-  }
-
-  Future<void> _newAppointment() async {
-    final created = await Navigator.of(context).push<bool>(
-      MaterialPageRoute(
-        builder: (_) => NewAppointmentPage(repository: widget.repository),
-      ),
-    );
-    if (created == true && mounted) _refresh();
-  }
-
-  Future<void> _openHistory() async {
-    final historyRepository = widget.historyRepository;
-    if (historyRepository == null) {
-      await Navigator.of(context).push<void>(
-        MaterialPageRoute(
-          builder: (_) => Scaffold(
-            appBar: AppBar(title: const Text('Histórico de consultas')),
-            body: const EmptyState(
-              title: 'Histórico ainda não conectado',
-              message: 'A integração do histórico precisa estar disponível para exibir consultas anteriores.',
-              icon: Icons.history,
-            ),
-          ),
-        ),
-      );
-      return;
-    }
-    await Navigator.of(context).push<void>(
-      MaterialPageRoute(
-        builder: (_) => PatientHistoryPage(repository: historyRepository),
-      ),
-    );
   }
 }

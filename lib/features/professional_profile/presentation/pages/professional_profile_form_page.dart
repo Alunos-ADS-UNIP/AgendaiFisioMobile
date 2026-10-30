@@ -5,6 +5,9 @@ import '../../../../core/utils/input_masks.dart';
 import '../../../../core/widgets/app_primary_button.dart';
 import '../../../../core/widgets/app_text_field.dart';
 import '../../../../core/widgets/error_state.dart';
+import '../../../appointments/domain/appointment_repository.dart';
+import '../../../appointments/domain/specialty.dart';
+import '../../../appointments/presentation/widgets/appointment_specialty_picker_sheet.dart';
 import '../../data/dtos/professional_profile_dtos.dart';
 import '../controllers/professional_profile_controller.dart';
 import '../widgets/profile_section.dart';
@@ -14,12 +17,22 @@ class ProfessionalProfileFormPage extends StatefulWidget {
     required this.controller,
     required this.onSaved,
     required this.onSessionExpired,
+    this.onLogout,
+    this.specialtyRepository,
     super.key,
   });
 
   final ProfessionalProfileController controller;
   final VoidCallback onSaved;
   final VoidCallback onSessionExpired;
+
+  /// Quando informado (primeiro acesso, sem tela anterior), mostra "Sair" na
+  /// barra superior.
+  final VoidCallback? onLogout;
+
+  /// Fonte do catálogo (GET /api/especialidade). Quando informado, o formulário
+  /// mostra o campo Especialidade, reutilizando o seletor já existente.
+  final AppointmentRepository? specialtyRepository;
 
   @override
   State<ProfessionalProfileFormPage> createState() =>
@@ -31,23 +44,45 @@ class _ProfessionalProfileFormPageState
   final _formKey = GlobalKey<FormState>();
   final _name = TextEditingController();
   final _cpf = TextEditingController();
-  final _crefito = TextEditingController();
+  final _crefitoRegion = TextEditingController();
+  final _crefito = TextEditingController(text: '-F');
   final _phone = TextEditingController();
   final _birthDateText = TextEditingController();
   final _bio = TextEditingController();
+  final _specialtyText = TextEditingController();
+  Specialty? _specialty;
   DateTime? _birthDate;
   bool _sessionExpiredHandled = false;
+  bool _crefitoRegionTouched = false;
+  bool _crefitoNumberTouched = false;
+
+  /// CPF e data de nascimento já cadastrados não podem ser alterados: ficam
+  /// bloqueados na edição e só são preenchidos no primeiro acesso.
+  late final bool _identityLocked =
+      widget.controller.profile?.isPendingCompletion == false &&
+      widget.controller.cpfInSession != null &&
+      widget.controller.birthDateInSession != null;
+
+  /// O CREFITO já cadastrado no formato certo também fica bloqueado na edição.
+  /// Cadastros antigos fora do padrão continuam editáveis para correção.
+  late final bool _crefitoLocked =
+      widget.controller.profile?.isPendingCompletion == false &&
+      InputMasks.parseCrefito(widget.controller.profile?.crefito ?? '') != null;
 
   @override
   void initState() {
     super.initState();
     widget.controller.addListener(_onChanged);
+    _crefito.addListener(_keepCursorBeforeF);
     final profile = widget.controller.profile;
     if (widget.controller.canEdit && profile != null) {
       _name.text = profile.isPendingCompletion ? '' : profile.name;
-      _crefito.text = profile.crefito;
+      final crefito = InputMasks.parseCrefito(profile.crefito);
+      _crefitoRegion.text = crefito?.region ?? '';
+      _crefito.text = '${crefito?.number ?? ''}-F';
       _phone.text = InputMasks.applyTelefoneMask(profile.phone);
       _bio.text = profile.bio;
+      _specialtyText.text = profile.specialtyName;
       _cpf.text = InputMasks.applyMask(
         InputMasks.cpf,
         widget.controller.cpfInSession ?? '',
@@ -62,11 +97,24 @@ class _ProfessionalProfileFormPageState
     widget.controller.removeListener(_onChanged);
     _name.dispose();
     _cpf.dispose();
+    _crefitoRegion.dispose();
     _crefito.dispose();
     _phone.dispose();
     _birthDateText.dispose();
     _bio.dispose();
+    _specialtyText.dispose();
     super.dispose();
+  }
+
+  /// O cursor do número do CREFITO nunca fica depois do "-F".
+  void _keepCursorBeforeF() {
+    final digits = InputMasks.digitsOnly(_crefito.text).length;
+    final selection = _crefito.selection;
+    if (selection.isValid &&
+        selection.isCollapsed &&
+        selection.baseOffset > digits) {
+      _crefito.selection = TextSelection.collapsed(offset: digits);
+    }
   }
 
   void _onChanged() {
@@ -81,27 +129,64 @@ class _ProfessionalProfileFormPageState
   static String _formatDate(DateTime date) =>
       '${date.day.toString().padLeft(2, '0')}/${date.month.toString().padLeft(2, '0')}/${date.year}';
 
-  Future<void> _chooseBirthDate() async {
-    final now = DateTime.now();
-    final picked = await showDatePicker(
-      context: context,
-      initialDate: _birthDate ?? DateTime(now.year - 30),
-      firstDate: DateTime(1900),
-      lastDate: now,
-      helpText: 'Data de nascimento',
-    );
-    if (picked != null && mounted) {
-      setState(() {
-        _birthDate = picked;
-        _birthDateText.text = _formatDate(picked);
-      });
-    }
+  /// Lê a data digitada (DD/MM/AAAA). Vazia ou incompleta vira null.
+  void _onBirthDateChanged(String value) {
+    setState(() => _birthDate = InputMasks.parseDate(value));
   }
 
+  String? _validateBirthDate(String? value) {
+    final date = InputMasks.parseDate(value ?? '');
+    if (date == null) return 'Informe uma data válida.';
+    return null;
+  }
+
+  Future<void> _chooseSpecialty() async {
+    final repository = widget.specialtyRepository;
+    if (repository == null) return;
+    final picked = await showModalBottomSheet<Specialty>(
+      context: context,
+      isScrollControlled: true,
+      builder: (_) => AppointmentSpecialtyPickerSheet(repository: repository),
+    );
+    if (picked == null || !mounted) return;
+    setState(() {
+      _specialty = picked;
+      _specialtyText.text = picked.name;
+    });
+  }
+
+  String? _crefitoRegionError() {
+    final region = int.tryParse(_crefitoRegion.text);
+    return region == null || region < 1 || region > 20 ? 'De 1 a 20' : null;
+  }
+
+  String? _crefitoNumberError() =>
+      InputMasks.digitsOnly(_crefito.text).length < 3
+      ? 'De 3 a 6 dígitos'
+      : null;
+
+  Widget _centeredError(BuildContext context, String? message) => Text(
+    message ?? '',
+    textAlign: TextAlign.center,
+    maxLines: 1,
+    style: Theme.of(context).textTheme.bodySmall
+        ?.copyWith(color: Theme.of(context).colorScheme.error),
+  );
+
   Future<void> _submit() async {
+    setState(() {
+      _crefitoRegionTouched = true;
+      _crefitoNumberTouched = true;
+    });
+    // O CREFITO é checado aqui: os dois campos mostram o aviso centralizado
+    // em vez do erro padrão do formulário.
+    final formValid = _formKey.currentState?.validate() ?? false;
+    final crefitoValid =
+        _crefitoRegionError() == null && _crefitoNumberError() == null;
     if (widget.controller.isSubmitting ||
         !widget.controller.canEdit ||
-        !(_formKey.currentState?.validate() ?? false)) {
+        !formValid ||
+        !crefitoValid) {
       return;
     }
     final date = _birthDate;
@@ -110,12 +195,14 @@ class _ProfessionalProfileFormPageState
       ProfessionalUpdateRequest(
         name: _name.text,
         cpf: _cpf.text,
-        crefito: _crefito.text,
+        crefito: InputMasks.buildCrefito(_crefitoRegion.text, _crefito.text),
         phone: _phone.text,
         birthDate: date,
         bio: _bio.text,
         isActive: widget.controller.profile!.isActive,
       ),
+      specialtyId: _specialty?.id,
+      specialtyName: _specialty?.name,
     );
     if (success && mounted) widget.onSaved();
   }
@@ -134,7 +221,21 @@ class _ProfessionalProfileFormPageState
     }
     final controller = widget.controller;
     return Scaffold(
-      appBar: AppBar(title: const Text('Editar perfil profissional')),
+      appBar: AppBar(
+        title: Text(
+          widget.controller.profile?.isPendingCompletion ?? true
+              ? 'Completar perfil'
+              : 'Editar perfil',
+        ),
+        actions: [
+          if (widget.onLogout != null)
+            IconButton(
+              tooltip: 'Sair',
+              onPressed: widget.onLogout,
+              icon: const Icon(Icons.logout),
+            ),
+        ],
+      ),
       body: SafeArea(
         child: SingleChildScrollView(
           padding: const EdgeInsets.all(AppSpacing.lg),
@@ -170,6 +271,7 @@ class _ProfessionalProfileFormPageState
                       AppTextField(
                         label: 'CPF',
                         controller: _cpf,
+                        enabled: !_identityLocked,
                         keyboardType: TextInputType.number,
                         textInputAction: TextInputAction.next,
                         inputFormatters: [InputMasks.cpfFormatter()],
@@ -199,13 +301,15 @@ class _ProfessionalProfileFormPageState
                       AppTextField(
                         label: 'Data de nascimento',
                         controller: _birthDateText,
-                        readOnly: true,
-                        onTap: _chooseBirthDate,
-                        suffixIcon: const Icon(Icons.calendar_today_outlined),
+                        enabled: !_identityLocked,
+                        keyboardType: TextInputType.number,
+                        textInputAction: TextInputAction.next,
+                        inputFormatters: [InputMasks.dataFormatter()],
+                        onChanged: _onBirthDateChanged,
+                        hint: 'DD/MM/AAAA',
+                        autovalidateMode: AutovalidateMode.onUserInteraction,
                         errorText: controller.errorFor('dataNascimento'),
-                        validator: (_) => _birthDate == null
-                            ? 'Selecione a data de nascimento.'
-                            : null,
+                        validator: _validateBirthDate,
                       ),
                     ],
                   ),
@@ -215,18 +319,131 @@ class _ProfessionalProfileFormPageState
                   title: 'Atuação profissional',
                   child: Column(
                     children: [
-                      AppTextField(
-                        label: 'CREFITO',
-                        controller: _crefito,
-                        textInputAction: TextInputAction.next,
-                        errorText: controller.errorFor('crefito'),
-                        validator: (value) {
-                          final length = value?.trim().length ?? 0;
-                          return length < 4 || length > 20
-                              ? 'Informe entre 4 e 20 caracteres.'
-                              : null;
-                        },
+                      if (widget.specialtyRepository != null) ...[
+                        AppTextField(
+                          label: 'Especialidade',
+                          controller: _specialtyText,
+                          readOnly: true,
+                          onTap: _chooseSpecialty,
+                          suffixIcon: const Icon(Icons.arrow_drop_down),
+                          validator: (value) => (value?.trim().isEmpty ?? true)
+                              ? 'Escolha sua especialidade.'
+                              : null,
+                        ),
+                        const SizedBox(height: AppSpacing.md),
+                      ],
+                      // CREFITO: primeiro o dígito da região, depois o restante.
+                      Row(
+                        children: [
+                          SizedBox(
+                            width: 150,
+                            child: AppTextField(
+                              label: 'Crefito',
+                              controller: _crefitoRegion,
+                              enabled: !_crefitoLocked,
+                              prefixText: 'CREFITO-',
+                              keyboardType: TextInputType.number,
+                              textInputAction: TextInputAction.next,
+                              inputFormatters: [
+                                InputMasks.crefitoRegionFormatter(),
+                              ],
+                              highlightError:
+                                  _crefitoRegionTouched &&
+                                  _crefitoRegionError() != null,
+                              onChanged: (_) =>
+                                  setState(() => _crefitoRegionTouched = true),
+                            ),
+                          ),
+                          // A barra fica entre os campos, fora deles, centralizada
+                          // na altura das caixas.
+                          Padding(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: AppSpacing.xs,
+                            ),
+                            child: Text(
+                              '/',
+                              style: Theme.of(context).textTheme.titleLarge
+                                  ?.copyWith(
+                                    color: _crefitoLocked
+                                        ? Theme.of(context)
+                                              .colorScheme
+                                              .onSurface
+                                              .withValues(alpha: 0.38)
+                                        : null,
+                                  ),
+                            ),
+                          ),
+                          Expanded(
+                            child: AppTextField(
+                              label: 'Número',
+                              controller: _crefito,
+                              enabled: !_crefitoLocked,
+                              keyboardType: TextInputType.number,
+                              textInputAction: TextInputAction.next,
+                              inputFormatters: [
+                                InputMasks.crefitoNumberFormatter(),
+                              ],
+                              // Só a borda vermelha; o texto vai no aviso
+                              // centralizado abaixo.
+                              highlightError:
+                                  (_crefitoNumberTouched &&
+                                      _crefitoNumberError() != null) ||
+                                  controller.errorFor('crefito') != null,
+                              onChanged: (_) =>
+                                  setState(() => _crefitoNumberTouched = true),
+                            ),
+                          ),
+                        ],
                       ),
+                      // Avisos centralizados embaixo de cada caixa.
+                      if ((_crefitoRegionTouched &&
+                              _crefitoRegionError() != null) ||
+                          (_crefitoNumberTouched &&
+                              _crefitoNumberError() != null) ||
+                          controller.errorFor('crefito') != null)
+                        Padding(
+                          padding: const EdgeInsets.only(top: AppSpacing.xxs),
+                          child: Row(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              SizedBox(
+                                width: 150,
+                                child: _centeredError(
+                                  context,
+                                  _crefitoRegionTouched
+                                      ? _crefitoRegionError()
+                                      : null,
+                                ),
+                              ),
+                              Visibility(
+                                visible: false,
+                                maintainSize: true,
+                                maintainAnimation: true,
+                                maintainState: true,
+                                child: Padding(
+                                  padding: const EdgeInsets.symmetric(
+                                    horizontal: AppSpacing.xs,
+                                  ),
+                                  child: Text(
+                                    '/',
+                                    style: Theme.of(context)
+                                        .textTheme
+                                        .titleLarge,
+                                  ),
+                                ),
+                              ),
+                              Expanded(
+                                child: _centeredError(
+                                  context,
+                                  (_crefitoNumberTouched
+                                          ? _crefitoNumberError()
+                                          : null) ??
+                                      controller.errorFor('crefito'),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
                       const SizedBox(height: AppSpacing.md),
                       AppTextField(
                         label: 'Bio (opcional)',

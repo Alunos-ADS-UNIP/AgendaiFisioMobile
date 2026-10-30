@@ -5,9 +5,11 @@ import '../../../../core/widgets/app_loading_skeleton.dart';
 import '../../../../core/widgets/empty_state.dart';
 import '../../../../core/widgets/error_state.dart';
 import '../../domain/availability_failure.dart';
+import '../../domain/availability_models.dart';
 import '../../domain/availability_repository.dart';
 import '../controllers/availability_controller.dart';
 import '../widgets/weekly_schedule.dart';
+import 'weekly_schedule_form_page.dart';
 
 /// Grade semanal do fisioterapeuta: carregando, indisponível, erro, vazio e
 /// grade. Somente leitura; a edição virá na weekly_schedule_form_page.
@@ -28,8 +30,7 @@ class _ProfessionalAvailabilityPageState
   @override
   void initState() {
     super.initState();
-    _controller = AvailabilityController(repository: widget.repository)
-      ..load();
+    _controller = AvailabilityController(repository: widget.repository)..load();
   }
 
   @override
@@ -38,15 +39,37 @@ class _ProfessionalAvailabilityPageState
     super.dispose();
   }
 
+  Future<void> _edit() async {
+    final saved = await Navigator.of(context).push<bool>(
+      MaterialPageRoute(
+        builder: (_) => WeeklyScheduleFormPage(
+          repository: widget.repository,
+          initial: _controller.schedule ?? WeeklySchedule.empty(),
+        ),
+      ),
+    );
+    if (saved == true && mounted) await _controller.load();
+  }
+
   @override
   Widget build(BuildContext context) => Scaffold(
-    appBar: AppBar(title: const Text('Grade de horários')),
+    appBar: AppBar(
+      title: const Text('Grade de horários'),
+      actions: [
+        ListenableBuilder(
+          listenable: _controller,
+          builder: (context, _) => IconButton(
+            tooltip: 'Editar grade',
+            onPressed: _controller.isLoading ? null : _edit,
+            icon: const Icon(Icons.edit_calendar_outlined),
+          ),
+        ),
+      ],
+    ),
     body: AnimatedBuilder(
       animation: _controller,
-      builder: (context, _) => RefreshIndicator(
-        onRefresh: _controller.load,
-        child: _body(),
-      ),
+      builder: (context, _) =>
+          RefreshIndicator(onRefresh: _controller.load, child: _body()),
     ),
   );
 
@@ -61,8 +84,7 @@ class _ProfessionalAvailabilityPageState
     } else if (c.isUnavailable) {
       child = const EmptyState(
         title: 'Grade ainda não disponível',
-        message:
-            'Esta funcionalidade será liberada quando o sistema estiver pronto.',
+        message: 'Esta funcionalidade será liberada quando o sistema estiver pronto.',
         icon: Icons.construction_outlined,
       );
     } else if (c.failure != null) {

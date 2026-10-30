@@ -5,6 +5,7 @@ import '../../../../core/utils/input_masks.dart';
 import '../../../../core/widgets/app_primary_button.dart';
 import '../../../../core/widgets/app_secondary_button.dart';
 import '../../../../core/widgets/error_state.dart';
+import '../../../appointments/domain/appointment_repository.dart';
 import '../../domain/professional_profile.dart';
 import '../controllers/professional_profile_controller.dart';
 import '../widgets/profile_section.dart';
@@ -15,6 +16,7 @@ class ProfessionalProfilePage extends StatefulWidget {
     required this.controller,
     required this.onLogout,
     this.onChangeSpecialty,
+    this.specialtyRepository,
     super.key,
   });
 
@@ -24,6 +26,9 @@ class ProfessionalProfilePage extends StatefulWidget {
   /// Recebe a navegação do módulo de especialidades, quando ele estiver ligado
   /// à sessão. A página recarrega o perfil ao voltar.
   final Future<void> Function()? onChangeSpecialty;
+
+  /// Repassado ao formulário para permitir escolher/trocar a especialidade.
+  final AppointmentRepository? specialtyRepository;
 
   @override
   State<ProfessionalProfilePage> createState() =>
@@ -67,6 +72,7 @@ class _ProfessionalProfilePageState extends State<ProfessionalProfilePage> {
           controller: widget.controller,
           onSaved: () => Navigator.of(context).pop(),
           onSessionExpired: _logout,
+          specialtyRepository: widget.specialtyRepository,
         ),
       ),
     );
@@ -81,16 +87,7 @@ class _ProfessionalProfilePageState extends State<ProfessionalProfilePage> {
 
   @override
   Widget build(BuildContext context) => Scaffold(
-    appBar: AppBar(
-      title: const Text('Meu perfil profissional'),
-      actions: [
-        IconButton(
-          tooltip: 'Sair',
-          onPressed: _logout,
-          icon: const Icon(Icons.logout),
-        ),
-      ],
-    ),
+    appBar: AppBar(title: const Text('Perfil profissional')),
     body: SafeArea(child: _body(context)),
   );
 
@@ -143,8 +140,9 @@ class _ProfessionalProfilePageState extends State<ProfessionalProfilePage> {
                         ? ''
                         : InputMasks.applyTelefoneMask(profile.phone),
                   ),
-                  _field('Bio', profile.bio),
                   _field('Especialidade', profile.specialtyName),
+                  _field('Bio', profile.bio),
+
                   _field('Situação', profile.isActive ? 'Ativo' : 'Inativo'),
                 ],
               ),
@@ -157,14 +155,15 @@ class _ProfessionalProfilePageState extends State<ProfessionalProfilePage> {
               icon: Icons.edit_outlined,
               onPressed: _edit,
             ),
-            const SizedBox(height: AppSpacing.sm),
-            AppSecondaryButton(
-              label: 'Alterar especialidade',
-              icon: Icons.spa_outlined,
-              onPressed: widget.onChangeSpecialty == null
-                  ? null
-                  : _changeSpecialty,
-            ),
+            // Sem rota/ação para trocar a especialidade, o botão não aparece.
+            if (widget.onChangeSpecialty != null) ...[
+              const SizedBox(height: AppSpacing.sm),
+              AppSecondaryButton(
+                label: 'Alterar especialidade',
+                icon: Icons.spa_outlined,
+                onPressed: _changeSpecialty,
+              ),
+            ],
             const SizedBox(height: AppSpacing.sm),
             AppSecondaryButton(
               label: 'Sair',

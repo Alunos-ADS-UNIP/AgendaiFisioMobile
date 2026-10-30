@@ -7,9 +7,9 @@ import '../../domain/professional_profile.dart';
 
 enum ProfessionalProfileStatus { loading, content, forbidden, error }
 
-/// Mantém dados privados enviados apenas durante a sessão atual. Como não há
-/// GET /api/profissional/me privado, CPF e nascimento nunca são inventados a
-/// partir do detalhe público.
+/// CPF e nascimento vêm de GET /api/profissional/me (só o próprio profissional
+/// lê). Se a rota não responder, valem os dados enviados na sessão atual; nunca
+/// são inventados a partir do detalhe público.
 class ProfessionalProfileController extends ChangeNotifier {
   ProfessionalProfileController(this._api);
 
@@ -57,6 +57,12 @@ class ProfessionalProfileController extends ChangeNotifier {
         _cpfInSession = null;
         _birthDateInSession = null;
       }
+      final private = await _api.fetchOwnPrivateData();
+      if (generation != _generation) return;
+      if (private != null && private.cpf.length == 11) {
+        _cpfInSession = private.cpf;
+      }
+      if (private?.birthDate != null) _birthDateInSession = private!.birthDate;
       _profile = loaded;
       _status = ProfessionalProfileStatus.content;
     } on ProfessionalAccessException {
@@ -84,7 +90,14 @@ class ProfessionalProfileController extends ChangeNotifier {
     if (generation == _generation) notifyListeners();
   }
 
-  Future<bool> submit(ProfessionalUpdateRequest request) async {
+  /// Salva o perfil. Quando [specialtyId] é informado, a especialidade é
+  /// enviada antes (rota própria); se ela falhar, o perfil não é salvo e o
+  /// formulário continua aberto para nova tentativa.
+  Future<bool> submit(
+    ProfessionalUpdateRequest request, {
+    String? specialtyId,
+    String? specialtyName,
+  }) async {
     if (!canEdit || _isSubmitting) return false;
     final generation = _generation;
     final current = _profile!;
@@ -103,6 +116,18 @@ class ProfessionalProfileController extends ChangeNotifier {
         bio: request.bio,
         isActive: current.isActive,
       );
+      if (specialtyId != null) {
+        try {
+          await _api.updateOwnSpecialty(specialtyId);
+        } on ApiException catch (error) {
+          if (error.isUnauthorized) rethrow;
+          if (generation != _generation) return false;
+          _submitError = error.isValidation || error.isConflict
+              ? 'Não foi possível salvar a especialidade. Escolha outra.'
+              : 'Não foi possível salvar a especialidade. ${error.message}';
+          return false;
+        }
+      }
       await _api.updateOwnProfile(safeRequest);
       if (generation != _generation || _profile?.id != current.id) return false;
       _profile = current.copyWith(
@@ -110,6 +135,7 @@ class ProfessionalProfileController extends ChangeNotifier {
         crefito: safeRequest.crefito.trim(),
         phone: safeRequest.phone.replaceAll(RegExp(r'\D'), ''),
         bio: safeRequest.bio.trim(),
+        specialtyName: specialtyId != null ? specialtyName : null,
       );
       _cpfInSession = safeRequest.cpf.replaceAll(RegExp(r'\D'), '');
       _birthDateInSession = safeRequest.birthDate;
