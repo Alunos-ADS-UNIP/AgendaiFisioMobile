@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/theme/app_spacing.dart';
 import '../../../../core/utils/input_masks.dart';
+import '../../../../core/widgets/app_loading_skeleton.dart';
 import '../../../../core/widgets/app_primary_button.dart';
 import '../../../../core/widgets/app_secondary_button.dart';
 import '../../../../core/widgets/error_state.dart';
@@ -16,6 +17,7 @@ class PatientProfilePage extends StatefulWidget {
     required this.controller,
     required this.onEdit,
     required this.onLogout,
+    this.onSessionExpired,
     super.key,
   });
 
@@ -28,11 +30,18 @@ class PatientProfilePage extends StatefulWidget {
   /// aqui só disparamos o callback.
   final VoidCallback onLogout;
 
+  /// Chamado quando a API recusa o token (401). Deve encerrar a sessão
+  /// marcando-a como expirada (para o login avisar o motivo). Se for nulo,
+  /// cai em [onLogout].
+  final VoidCallback? onSessionExpired;
+
   @override
   State<PatientProfilePage> createState() => _PatientProfilePageState();
 }
 
 class _PatientProfilePageState extends State<PatientProfilePage> {
+  bool _expiredHandled = false;
+
   @override
   void initState() {
     super.initState();
@@ -47,11 +56,13 @@ class _PatientProfilePageState extends State<PatientProfilePage> {
   }
 
   void _onControllerChanged() {
-    if (widget.controller.isSessionExpired) {
-      widget.onLogout();
-      return;
+    if (widget.controller.isSessionExpired && !_expiredHandled) {
+      _expiredHandled = true;
+      (widget.onSessionExpired ?? widget.onLogout)();
     }
-    setState(() {});
+    // Sempre reconstrói: assim o skeleton sai da tela mesmo que o callback
+    // de sessão expirada não troque a tela na hora.
+    if (mounted) setState(() {});
   }
 
   @override
@@ -76,9 +87,16 @@ class _PatientProfilePageState extends State<PatientProfilePage> {
   Widget _buildBody(BuildContext context, PatientProfileController controller) {
     switch (controller.status) {
       case PatientProfileStatus.loading:
-        // TODO(Dudu): trocar por AppLoadingSkeleton quando eu confirmar a
-        // assinatura dele — não vi o conteúdo de app_loading_skeleton.dart.
-        return const Center(child: CircularProgressIndicator());
+        return ListView(
+          padding: const EdgeInsets.all(AppSpacing.lg),
+          children: const [
+            AppLoadingSkeleton(lines: 4),
+            SizedBox(height: AppSpacing.md),
+            AppLoadingSkeleton(lines: 3),
+            SizedBox(height: AppSpacing.md),
+            AppLoadingSkeleton(lines: 5),
+          ],
+        );
 
       case PatientProfileStatus.error:
         return ErrorState(

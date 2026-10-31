@@ -21,11 +21,17 @@ class PatientProfileFormController extends ChangeNotifier {
   String? _generalError;
   String? get generalError => _generalError;
 
+  bool _sessionExpired = false;
+
+  /// `true` se o último envio voltou 401 (token recusado).
+  bool get isSessionExpired => _sessionExpired;
+
   /// Retorna true em caso de sucesso, para a página decidir a navegação.
   Future<bool> submit(PatientUpdateRequest request) async {
     _isSubmitting = true;
     _fieldErrors = {};
     _generalError = null;
+    _sessionExpired = false;
     notifyListeners();
 
     try {
@@ -35,7 +41,10 @@ class PatientProfileFormController extends ChangeNotifier {
       return true;
     } on ApiException catch (e) {
       _isSubmitting = false;
-      if (e.isValidation) {
+      if (e.isUnauthorized) {
+        _sessionExpired = true;
+        _generalError = e.message;
+      } else if (e.isValidation) {
         _fieldErrors = e.fieldErrors!;
       } else {
         _generalError = e.message;

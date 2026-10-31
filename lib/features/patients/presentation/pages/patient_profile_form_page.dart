@@ -20,6 +20,7 @@ class PatientProfileFormPage extends StatefulWidget {
     required this.controller,
     required this.currentPatient,
     required this.onSaved,
+    this.onSessionExpired,
     this.cepLookup,
     super.key,
   });
@@ -27,6 +28,9 @@ class PatientProfileFormPage extends StatefulWidget {
   final PatientProfileFormController controller;
   final Patient currentPatient;
   final VoidCallback onSaved;
+
+  /// Chamado uma vez se o envio voltar 401 (sessão expirada).
+  final VoidCallback? onSessionExpired;
 
   /// Consulta de CEP usada para preencher rua/bairro/cidade/estado. Por
   /// padrão usa o [ViaCepClient]; só é injetável para testes.
@@ -130,7 +134,15 @@ class _PatientProfileFormPageState extends State<PatientProfileFormPage> {
     super.dispose();
   }
 
-  void _onControllerChanged() => setState(() {});
+  bool _expiredHandled = false;
+
+  void _onControllerChanged() {
+    if (widget.controller.isSessionExpired && !_expiredHandled) {
+      _expiredHandled = true;
+      widget.onSessionExpired?.call();
+    }
+    if (mounted) setState(() {});
+  }
 
   /// Chamado só quando o usuário edita o CEP (não quando a tela abre
   /// pré-preenchida). Com 8 dígitos consulta o ViaCEP e preenche rua,
