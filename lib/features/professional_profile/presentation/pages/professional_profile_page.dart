@@ -14,12 +14,17 @@ class ProfessionalProfilePage extends StatefulWidget {
   const ProfessionalProfilePage({
     required this.controller,
     required this.onLogout,
+    this.onSessionExpired,
     this.onChangeSpecialty,
     super.key,
   });
 
   final ProfessionalProfileController controller;
   final VoidCallback onLogout;
+
+  /// Chamado quando a API recusa o token (401). Deve encerrar a sessão
+  /// marcando-a como expirada. Se for nulo, cai em [onLogout].
+  final VoidCallback? onSessionExpired;
 
   /// Recebe a navegação do módulo de especialidades, quando ele estiver ligado
   /// à sessão. A página recarrega o perfil ao voltar.
@@ -47,10 +52,7 @@ class _ProfessionalProfilePageState extends State<ProfessionalProfilePage> {
   }
 
   void _onChanged() {
-    if (widget.controller.isSessionExpired) {
-      _logout();
-      return;
-    }
+    if (widget.controller.isSessionExpired) _expire();
     if (mounted) setState(() {});
   }
 
@@ -60,13 +62,19 @@ class _ProfessionalProfilePageState extends State<ProfessionalProfilePage> {
     widget.onLogout();
   }
 
+  void _expire() {
+    if (_logoutRequested) return;
+    _logoutRequested = true;
+    (widget.onSessionExpired ?? widget.onLogout)();
+  }
+
   Future<void> _edit() async {
     await Navigator.of(context).push<void>(
       MaterialPageRoute(
         builder: (context) => ProfessionalProfileFormPage(
           controller: widget.controller,
           onSaved: () => Navigator.of(context).pop(),
-          onSessionExpired: _logout,
+          onSessionExpired: _expire,
         ),
       ),
     );

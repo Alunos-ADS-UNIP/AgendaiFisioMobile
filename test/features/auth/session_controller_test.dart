@@ -76,6 +76,27 @@ void main() {
       expect(controller.sessionExpired, isFalse);
     });
 
+    test('novo login remove o estado de sessão expirada', () async {
+      final controller = SessionController(
+        authGateway: _FakeAuthGateway(
+          loginResult: _session(expiresAt: now.add(const Duration(hours: 1))),
+        ),
+        storage: _MemoryStorage(),
+        now: () => now,
+      );
+      await controller.login(email: 'ana@example.com', password: 'segredo');
+      await controller.expireSession();
+      expect(controller.sessionExpired, isTrue);
+
+      final success = await controller.login(
+        email: 'ana@example.com',
+        password: 'segredo',
+      );
+
+      expect(success, isTrue);
+      expect(controller.sessionExpired, isFalse);
+    });
+
     test('logout voluntário não marca a sessão como expirada', () async {
       final controller = SessionController(
         authGateway: _FakeAuthGateway(

@@ -70,6 +70,8 @@ class _AgendaiFisioAppState extends State<AgendaiFisioApp> {
   AppointmentApiRepository? _appointmentRepository;
   HistoryApiRepository? _historyRepository;
   bool _ownsSessionController = false;
+  final _navigatorKey = GlobalKey<NavigatorState>();
+  SessionStatus? _lastSessionStatus;
 
   @override
   void initState() {
@@ -100,13 +102,31 @@ class _AgendaiFisioAppState extends State<AgendaiFisioApp> {
     );
     _historyRepository = HistoryApiRepository(_historyGet);
 
+    _lastSessionStatus = session.status;
+    session.addListener(_onSessionChanged);
+
     if (session.status == SessionStatus.restoring) {
       unawaited(session.restore());
     }
   }
 
+  /// Quando a sessão cai (logout ou 401), telas empilhadas por cima da home
+  /// (formulários, perfil aberto a partir da home) precisam sair do caminho,
+  /// senão ficariam por cima do login.
+  void _onSessionChanged() {
+    final status = _sessionController!.status;
+    final wasAuthenticated = _lastSessionStatus == SessionStatus.authenticated;
+    _lastSessionStatus = status;
+    if (wasAuthenticated && status == SessionStatus.unauthenticated) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        _navigatorKey.currentState?.popUntil((route) => route.isFirst);
+      });
+    }
+  }
+
   @override
   void dispose() {
+    _sessionController?.removeListener(_onSessionChanged);
     if (_ownsSessionController) _sessionController?.dispose();
     _appointmentRepository?.dispose();
     super.dispose();
@@ -139,6 +159,7 @@ class _AgendaiFisioAppState extends State<AgendaiFisioApp> {
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
+      navigatorKey: _navigatorKey,
       title: 'AgendaiFisio',
       debugShowCheckedModeBanner: false,
       theme: AppTheme.light,
@@ -184,6 +205,7 @@ class _AgendaiFisioAppState extends State<AgendaiFisioApp> {
         repository: _appointmentRepository!,
         professionalName: user.email.split('@').first,
         onLogout: () => unawaited(session.logout()),
+        onSessionExpired: () => unawaited(session.expireSession()),
       );
     }
     if (user.role != UserRole.patient) {
@@ -205,6 +227,7 @@ class _AgendaiFisioAppState extends State<AgendaiFisioApp> {
     return PatientProfilePage(
       controller: controller,
       onLogout: () => unawaited(session.logout()),
+      onSessionExpired: () => unawaited(session.expireSession()),
       onEdit: (patient) async {
         final saved = await Navigator.of(context).push<bool>(
           MaterialPageRoute(
@@ -212,6 +235,7 @@ class _AgendaiFisioAppState extends State<AgendaiFisioApp> {
               controller: PatientProfileFormController(_patientApi!),
               currentPatient: patient,
               onSaved: () => Navigator.of(routeContext).pop(true),
+              onSessionExpired: () => unawaited(session.expireSession()),
             ),
           ),
         );
@@ -294,6 +318,7 @@ class _ProfessionalHome extends StatefulWidget {
     required this.repository,
     required this.professionalName,
     required this.onLogout,
+    required this.onSessionExpired,
     super.key,
   });
 
@@ -301,6 +326,7 @@ class _ProfessionalHome extends StatefulWidget {
   final AppointmentRepository repository;
   final String professionalName;
   final VoidCallback onLogout;
+  final VoidCallback onSessionExpired;
 
   @override
   State<_ProfessionalHome> createState() => _ProfessionalHomeState();
@@ -344,6 +370,7 @@ class _ProfessionalHomeState extends State<_ProfessionalHome> {
             Navigator.of(context).pop();
             widget.onLogout();
           },
+          onSessionExpired: widget.onSessionExpired,
         ),
       ),
     ),

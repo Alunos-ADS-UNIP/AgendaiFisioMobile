@@ -86,6 +86,26 @@ void main() {
     expect(find.byKey(const Key('session-expired-notice')), findsNothing);
   });
 
+  testWidgets('editar a senha também remove o aviso de sessão expirada', (
+    tester,
+  ) async {
+    final controller = await _controller(gateway: _LoginGateway(session: _ok));
+    await controller.login(email: 'ana@example.com', password: 'segredo');
+    await controller.expireSession();
+    await _pumpLogin(tester, controller);
+    expect(find.byKey(const Key('session-expired-notice')), findsOneWidget);
+
+    await tester.enterText(find.byKey(const Key('login-password')), 'x');
+    await tester.pump();
+    expect(find.byKey(const Key('session-expired-notice')), findsNothing);
+  });
+
+  testWidgets('sem sessão expirada o aviso não aparece', (tester) async {
+    final controller = await _controller();
+    await _pumpLogin(tester, controller);
+    expect(find.byKey(const Key('session-expired-notice')), findsNothing);
+  });
+
   testWidgets('não apresenta overflow em iPhone compacto', (tester) async {
     tester.view.physicalSize = const Size(375, 667);
     tester.view.devicePixelRatio = 1;
