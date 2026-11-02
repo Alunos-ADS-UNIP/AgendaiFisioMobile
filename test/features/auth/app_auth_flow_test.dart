@@ -75,6 +75,7 @@ void main() {
         sessionController: controller,
         professionalProfileApi: _FakeProfessionalApi(
           fetchError: ApiException('Sessão expirada.', statusCode: 401),
+          failFromCall: 2, // a home carrega; o 401 vem ao abrir o perfil
         ),
       ),
     );
@@ -94,6 +95,68 @@ void main() {
     await tester.enterText(find.byKey(const Key('login-email')), 'a');
     await tester.pump();
     expect(find.byKey(const Key('session-expired-notice')), findsNothing);
+  });
+
+  testWidgets('401 já ao carregar a home também avisa no login', (
+    tester,
+  ) async {
+    final controller = SessionController(
+      authGateway: _ProfessionalGateway(),
+      storage: _MemoryStorage(),
+    );
+    await tester.pumpWidget(
+      AgendaiFisioApp(
+        sessionController: controller,
+        professionalProfileApi: _FakeProfessionalApi(
+          fetchError: ApiException('Sessão expirada.', statusCode: 401),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+    await _login(tester);
+
+    expect(controller.sessionExpired, isTrue);
+    expect(find.byKey(const Key('session-expired-notice')), findsOneWidget);
+  });
+
+  testWidgets('a tela principal do profissional mostra só o primeiro nome', (
+    tester,
+  ) async {
+    final controller = SessionController(
+      authGateway: _ProfessionalGateway(),
+      storage: _MemoryStorage(),
+    );
+    await tester.pumpWidget(
+      AgendaiFisioApp(
+        sessionController: controller,
+        professionalProfileApi: _FakeProfessionalApi(
+          profileName: 'maria souza lima',
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+    await _login(tester);
+
+    expect(find.text('Olá, Maria!'), findsOneWidget);
+  });
+
+  testWidgets('perfil pendente não mostra "Cadastro" na saudação', (
+    tester,
+  ) async {
+    final controller = SessionController(
+      authGateway: _ProfessionalGateway(),
+      storage: _MemoryStorage(),
+    );
+    await tester.pumpWidget(
+      AgendaiFisioApp(
+        sessionController: controller,
+        professionalProfileApi: _FakeProfessionalApi(),
+      ),
+    );
+    await tester.pumpAndSettle();
+    await _login(tester);
+
+    expect(find.text('Olá!'), findsOneWidget);
   });
 
   testWidgets('logout voluntário não mostra o aviso de sessão expirada', (
@@ -190,18 +253,28 @@ Future<void> _openProfessionalProfile(WidgetTester tester) async {
 }
 
 class _FakeProfessionalApi extends ProfessionalProfileApi {
-  _FakeProfessionalApi({this.fetchError})
-    : super(ApiClient(baseUrl: 'http://localhost'));
+  _FakeProfessionalApi({
+    this.fetchError,
+    this.failFromCall = 1,
+    this.profileName = 'Cadastro Pendente',
+  }) : super(ApiClient(baseUrl: 'http://localhost'));
 
   final Object? fetchError;
+
+  /// A partir de qual chamada de fetchOwnProfile o erro passa a ser lançado
+  /// (1 = já na home; 2 = só quando a tela de perfil é aberta).
+  final int failFromCall;
+  final String profileName;
+  int _calls = 0;
   String? registeredEmail;
 
   @override
   Future<ProfessionalProfile> fetchOwnProfile() async {
-    if (fetchError != null) throw fetchError!;
-    return const ProfessionalProfile(
+    _calls++;
+    if (fetchError != null && _calls >= failFromCall) throw fetchError!;
+    return ProfessionalProfile(
         id: 'professional-1',
-        name: 'Cadastro Pendente',
+        name: profileName,
         email: 'fisio@example.com',
         crefito: '',
         phone: '',

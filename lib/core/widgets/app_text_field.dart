@@ -26,6 +26,7 @@ class AppTextField extends StatelessWidget {
     this.inputFormatters,
     this.readOnly = false,
     this.onTap,
+    this.textCapitalization = TextCapitalization.none,
     super.key,
   });
 
@@ -48,6 +49,10 @@ class AppTextField extends StatelessWidget {
   final bool readOnly;
   final VoidCallback? onTap;
 
+  /// Ex.: [TextCapitalization.words] em campos de nome, para o teclado já
+  /// abrir com a primeira letra maiúscula.
+  final TextCapitalization textCapitalization;
+
   @override
   Widget build(BuildContext context) {
     return TextFormField(
@@ -64,6 +69,7 @@ class AppTextField extends StatelessWidget {
       inputFormatters: inputFormatters,
       readOnly: readOnly,
       onTap: onTap,
+      textCapitalization: textCapitalization,
       decoration: InputDecoration(
         labelText: label,
         hintText: hint,

@@ -7,6 +7,7 @@ import 'package:http/http.dart' as http;
 import '../core/config/api_config.dart';
 import '../core/network/api_client.dart';
 import '../core/theme/app_colors.dart';
+import '../core/utils/person_name.dart';
 import '../core/theme/app_theme.dart';
 import '../development/component_catalog_page.dart';
 import '../features/appointments/data/appointment_api_repository.dart';
@@ -73,6 +74,11 @@ class _AgendaiFisioAppState extends State<AgendaiFisioApp> {
   final _navigatorKey = GlobalKey<NavigatorState>();
   SessionStatus? _lastSessionStatus;
 
+  /// Primeiro nome do paciente logado, para a saudação da tela principal.
+  /// A sessão só guarda o e-mail; o nome vem do perfil (GET /me).
+  final _patientFirstName = ValueNotifier<String?>(null);
+  int _nameRequest = 0;
+
   @override
   void initState() {
     super.initState();
@@ -104,6 +110,9 @@ class _AgendaiFisioAppState extends State<AgendaiFisioApp> {
 
     _lastSessionStatus = session.status;
     session.addListener(_onSessionChanged);
+    if (session.status == SessionStatus.authenticated) {
+      unawaited(_loadPatientName());
+    }
 
     if (session.status == SessionStatus.restoring) {
       unawaited(session.restore());
@@ -117,6 +126,13 @@ class _AgendaiFisioAppState extends State<AgendaiFisioApp> {
     final status = _sessionController!.status;
     final wasAuthenticated = _lastSessionStatus == SessionStatus.authenticated;
     _lastSessionStatus = status;
+    if (!wasAuthenticated && status == SessionStatus.authenticated) {
+      unawaited(_loadPatientName());
+    }
+    if (status == SessionStatus.unauthenticated) {
+      _nameRequest++;
+      _patientFirstName.value = null;
+    }
     if (wasAuthenticated && status == SessionStatus.unauthenticated) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
         _navigatorKey.currentState?.popUntil((route) => route.isFirst);
@@ -127,9 +143,24 @@ class _AgendaiFisioAppState extends State<AgendaiFisioApp> {
   @override
   void dispose() {
     _sessionController?.removeListener(_onSessionChanged);
+    _nameRequest++;
+    _patientFirstName.dispose();
     if (_ownsSessionController) _sessionController?.dispose();
     _appointmentRepository?.dispose();
     super.dispose();
+  }
+
+  Future<void> _loadPatientName() async {
+    if (_sessionController?.user?.role != UserRole.patient) return;
+    final request = ++_nameRequest;
+    try {
+      final me = await _patientApi!.getMe();
+      if (request != _nameRequest || !mounted) return;
+      _patientFirstName.value = firstName(me.nomeCompleto);
+    } catch (_) {
+      // A saudação é só um detalhe: se falhar, fica "Olá!". Erros de verdade
+      // (inclusive sessão expirada) aparecem na tela de perfil.
+    }
   }
 
   Future<HistoryHttpResponse> _historyGet(
@@ -203,7 +234,6 @@ class _AgendaiFisioAppState extends State<AgendaiFisioApp> {
         key: ValueKey(user.userId),
         api: _professionalProfileApi!,
         repository: _appointmentRepository!,
-        professionalName: user.email.split('@').first,
         onLogout: () => unawaited(session.logout()),
         onSessionExpired: () => unawaited(session.expireSession()),
       );
@@ -214,11 +244,14 @@ class _AgendaiFisioAppState extends State<AgendaiFisioApp> {
         onLogout: () => unawaited(session.logout()),
       );
     }
-    return PatientAreaPage(
-      repository: _appointmentRepository!,
-      historyRepository: _historyRepository,
-      patientName: user.email.split('@').first,
-      profileBuilder: (context) => _buildPatientProfile(context, session),
+    return ValueListenableBuilder<String?>(
+      valueListenable: _patientFirstName,
+      builder: (context, name, _) => PatientAreaPage(
+        repository: _appointmentRepository!,
+        historyRepository: _historyRepository,
+        patientName: name,
+        profileBuilder: (context) => _buildPatientProfile(context, session),
+      ),
     );
   }
 
@@ -239,7 +272,13 @@ class _AgendaiFisioAppState extends State<AgendaiFisioApp> {
             ),
           ),
         );
-        if (saved == true) await controller.load();
+        if (saved == true) {
+          await controller.load();
+          final updated = controller.patient;
+          if (updated != null) {
+            _patientFirstName.value = firstName(updated.nomeCompleto);
+          }
+        }
       },
     );
   }
@@ -316,7 +355,6 @@ class _ProfessionalHome extends StatefulWidget {
   const _ProfessionalHome({
     required this.api,
     required this.repository,
-    required this.professionalName,
     required this.onLogout,
     required this.onSessionExpired,
     super.key,
@@ -324,7 +362,6 @@ class _ProfessionalHome extends StatefulWidget {
 
   final ProfessionalProfileApi api;
   final AppointmentRepository repository;
-  final String professionalName;
   final VoidCallback onLogout;
   final VoidCallback onSessionExpired;
 
@@ -339,10 +376,30 @@ class _ProfessionalHomeState extends State<_ProfessionalHome> {
   void initState() {
     super.initState();
     _controller = ProfessionalProfileController(widget.api);
+    // O perfil carregado aqui também alimenta o nome da saudação e se
+    // atualiza sozinho depois de uma edição.
+    _controller.addListener(_onProfileChanged);
+    _controller.load();
+  }
+
+  bool _expiredHandled = false;
+
+  void _onProfileChanged() {
+    if (_controller.isSessionExpired && !_expiredHandled) {
+      _expiredHandled = true;
+      widget.onSessionExpired();
+    }
+    // O perfil também carrega quando a tela de perfil é montada, ou seja,
+    // durante uma construção: setState direto aqui seria ilegal. Adia para
+    // logo depois do build atual.
+    Future.microtask(() {
+      if (mounted) setState(() {});
+    });
   }
 
   @override
   void dispose() {
+    _controller.removeListener(_onProfileChanged);
     _controller.dispose();
     super.dispose();
   }
@@ -350,7 +407,7 @@ class _ProfessionalHomeState extends State<_ProfessionalHome> {
   @override
   Widget build(BuildContext context) => ProfessionalHomePage(
     repository: widget.repository,
-    professionalName: widget.professionalName,
+    professionalName: firstName(_controller.profile?.name),
     onLogout: widget.onLogout,
     // Backend ainda sem rotas de grade: o repositório "indisponível" faz a
     // tela mostrar o estado honesto. Trocar pelo HTTP quando houver contrato.

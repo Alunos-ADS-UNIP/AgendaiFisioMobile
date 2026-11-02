@@ -157,6 +157,7 @@ class _ProfessionalProfileFormPageState
                       AppTextField(
                         label: 'Nome completo',
                         controller: _name,
+                        textCapitalization: TextCapitalization.words,
                         textInputAction: TextInputAction.next,
                         errorText: controller.errorFor('nomeCompleto'),
                         validator: (value) {
