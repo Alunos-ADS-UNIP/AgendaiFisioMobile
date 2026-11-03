@@ -5,6 +5,13 @@ import 'package:http/http.dart' as http;
 import 'api_exception.dart';
 import 'auth_header_provider.dart';
 
+class ApiClientResponse {
+  const ApiClientResponse({required this.statusCode, this.body});
+
+  final int statusCode;
+  final Object? body;
+}
+
 /// Cliente HTTP único do aplicativo. Centraliza a URL base, a injeção do
 /// Bearer token em chamadas autenticadas e a conversão de erros da API em
 /// [ApiException].
@@ -28,25 +35,25 @@ class ApiClient {
   final AuthHeaderProvider? authHeaderProvider;
 
   Future<Map<String, dynamic>> get(String path, {bool authenticated = true}) =>
-      _send('GET', path, authenticated: authenticated);
+      _sendMap('GET', path, authenticated: authenticated);
 
   Future<Map<String, dynamic>> post(
     String path,
     Map<String, dynamic> body, {
     bool authenticated = false,
-  }) => _send('POST', path, body: body, authenticated: authenticated);
+  }) => _sendMap('POST', path, body: body, authenticated: authenticated);
 
   Future<Map<String, dynamic>> put(
     String path,
     Map<String, dynamic> body, {
     bool authenticated = true,
-  }) => _send('PUT', path, body: body, authenticated: authenticated);
+  }) => _sendMap('PUT', path, body: body, authenticated: authenticated);
 
-  Future<Map<String, dynamic>> _send(
+  Future<ApiClientResponse> request(
     String method,
     String path, {
     Map<String, dynamic>? body,
-    required bool authenticated,
+    bool authenticated = true,
   }) async {
     final base = Uri.parse(baseUrl);
     final uri = base.resolve(path);
@@ -60,7 +67,25 @@ class ApiClient {
     final response = await http.Response.fromStream(
       await _client.send(request),
     );
-    return _decode(response);
+    return _decodeResponse(response);
+  }
+
+  Future<Map<String, dynamic>> _sendMap(
+    String method,
+    String path, {
+    Map<String, dynamic>? body,
+    required bool authenticated,
+  }) async {
+    final response = await request(
+      method,
+      path,
+      body: body,
+      authenticated: authenticated,
+    );
+    if (response.body is Map<String, dynamic>) {
+      return response.body! as Map<String, dynamic>;
+    }
+    return <String, dynamic>{};
   }
 
   Future<Map<String, String>> _buildHeaders({
@@ -82,7 +107,7 @@ class ApiClient {
     return headers;
   }
 
-  Map<String, dynamic> _decode(http.Response response) {
+  ApiClientResponse _decodeResponse(http.Response response) {
     dynamic decoded;
     if (response.body.isNotEmpty) {
       try {
@@ -95,8 +120,7 @@ class ApiClient {
     final isSuccess = response.statusCode >= 200 && response.statusCode < 300;
 
     if (isSuccess) {
-      if (decoded is Map<String, dynamic>) return decoded;
-      return <String, dynamic>{};
+      return ApiClientResponse(statusCode: response.statusCode, body: decoded);
     }
 
     throw _toApiException(response.statusCode, decoded);

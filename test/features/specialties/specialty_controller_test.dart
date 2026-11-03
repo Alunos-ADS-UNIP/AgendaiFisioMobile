@@ -8,6 +8,7 @@ import 'package:agendaifisiomobile/features/specialties/presentation/controllers
 class FakeSpecialtyRepository implements SpecialtyRepository {
   List<Specialty> items = const [Specialty(id: '1', name: 'Ortopedia')];
   bool failUpdate = false;
+  SpecialtyFailure updateFailure = SpecialtyFailure.conflict;
   bool failList = false;
   String? savedId;
   String? createdName;
@@ -32,9 +33,11 @@ class FakeSpecialtyRepository implements SpecialtyRepository {
   @override
   Future<void> updateProfessionalSpecialty(String specialtyId) async {
     if (failUpdate) {
-      throw const SpecialtyException(
-        SpecialtyFailure.conflict,
-        'Conflito de teste.',
+      throw SpecialtyException(
+        updateFailure,
+        updateFailure == SpecialtyFailure.forbidden
+            ? 'Você não tem permissão para realizar esta ação.'
+            : 'Conflito de teste.',
       );
     }
     savedId = specialtyId;
@@ -106,6 +109,53 @@ void main() {
     expect(controller.selectedId, 'new');
     controller.dispose();
   });
+
+  test('403 preserva seleção confirmada e apresenta acesso negado', () async {
+    final repository = FakeSpecialtyRepository()
+      ..failUpdate = true
+      ..updateFailure = SpecialtyFailure.forbidden;
+    final controller = ProfessionalSpecialtyController(
+      repository: repository,
+      initialId: 'confirmed',
+    );
+
+    expect(await controller.save('new'), isFalse);
+    expect(controller.selectedId, 'confirmed');
+    expect(
+      controller.errorMessage,
+      'Você não tem permissão para realizar esta ação.',
+    );
+    controller.dispose();
+  });
+
+  test(
+    'falhas 400, 401, 409, 500 e rede preservam seleção e permitem retry',
+    () async {
+      for (final failure in [
+        SpecialtyFailure.badRequest,
+        SpecialtyFailure.unauthorized,
+        SpecialtyFailure.conflict,
+        SpecialtyFailure.unexpected,
+        SpecialtyFailure.network,
+      ]) {
+        final repository = FakeSpecialtyRepository()
+          ..failUpdate = true
+          ..updateFailure = failure;
+        final controller = ProfessionalSpecialtyController(
+          repository: repository,
+          initialId: 'confirmed',
+        );
+
+        expect(await controller.save('attempted'), isFalse);
+        expect(controller.selectedId, 'confirmed');
+
+        repository.failUpdate = false;
+        expect(await controller.save('confirmed-after-retry'), isTrue);
+        expect(controller.selectedId, 'confirmed-after-retry');
+        controller.dispose();
+      }
+    },
+  );
 
   test('cadastro retorna item somente após o repository confirmar', () async {
     final repository = FakeSpecialtyRepository();

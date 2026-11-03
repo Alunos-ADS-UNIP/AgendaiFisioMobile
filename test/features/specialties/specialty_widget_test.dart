@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 import 'package:agendaifisiomobile/core/theme/app_theme.dart';
+import 'package:agendaifisiomobile/features/auth/domain/auth_session.dart';
 import 'package:agendaifisiomobile/features/specialties/domain/entities/specialty.dart';
 import 'package:agendaifisiomobile/features/specialties/domain/repositories/specialty_repository.dart';
 import 'package:agendaifisiomobile/features/specialties/domain/specialty_failure.dart';
@@ -18,6 +19,7 @@ class WidgetSpecialtyRepository implements SpecialtyRepository {
   List<Specialty> items;
   bool failList = false;
   bool failSave = false;
+  SpecialtyFailure saveFailure = SpecialtyFailure.conflict;
   bool failCreate = false;
   bool failDetails = false;
   int detailsCalls = 0;
@@ -62,9 +64,11 @@ class WidgetSpecialtyRepository implements SpecialtyRepository {
   @override
   Future<void> updateProfessionalSpecialty(String specialtyId) async {
     if (failSave) {
-      throw const SpecialtyException(
-        SpecialtyFailure.conflict,
-        'Conflito ao atualizar especialidade.',
+      throw SpecialtyException(
+        saveFailure,
+        saveFailure == SpecialtyFailure.forbidden
+            ? 'Você não tem permissão para realizar esta ação.'
+            : 'Conflito ao atualizar especialidade.',
       );
     }
     savedId = specialtyId;
@@ -165,6 +169,7 @@ void main() {
       ProfessionalSpecialtyPage(
         catalogController: catalog,
         professionalController: professional,
+        userRole: UserRole.professional,
       ),
     );
     await tester.tap(find.text('Ortopedia'));
@@ -174,18 +179,64 @@ void main() {
     await tester.tap(find.text('Salvar especialidade'));
     await tester.pumpAndSettle();
     expect(professional.selectedId, '1');
+    expect(find.text('Aquática'), findsWidgets);
     expect(find.text('Conflito ao atualizar especialidade.'), findsWidgets);
 
     repository.failSave = false;
-    await tester.tap(find.text('Ortopedia'));
+    await tester.tap(find.text('Aquática').first);
     await tester.pumpAndSettle();
-    await tester.tap(find.text('Aquática'));
+    await tester.tap(find.text('Aquática').last);
     await tester.pumpAndSettle();
     await tester.tap(find.text('Salvar especialidade'));
     await tester.pumpAndSettle();
     expect(repository.savedId, '2');
     expect(professional.selectedId, '2');
     catalog.dispose();
+    professional.dispose();
+  });
+
+  testWidgets('reabrir após falha mostra o vínculo confirmado', (tester) async {
+    final repository = WidgetSpecialtyRepository(items: items)..failSave = true;
+    final catalog = SpecialtyCatalogController(repository: repository);
+    final professional = ProfessionalSpecialtyController(
+      repository: repository,
+      initialId: '1',
+    );
+
+    await _pumpPage(
+      tester,
+      ProfessionalSpecialtyPage(
+        catalogController: catalog,
+        professionalController: professional,
+        userRole: UserRole.professional,
+      ),
+    );
+    await tester.tap(find.text('Ortopedia'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Aquática'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Salvar especialidade'));
+    await tester.pumpAndSettle();
+
+    expect(professional.selectedId, '1');
+    expect(find.text('Aquática'), findsWidgets);
+
+    await tester.pumpWidget(_app(const SizedBox.shrink()));
+    await tester.pump();
+    catalog.dispose();
+    final reopenedCatalog = SpecialtyCatalogController(repository: repository);
+    await _pumpPage(
+      tester,
+      ProfessionalSpecialtyPage(
+        catalogController: reopenedCatalog,
+        professionalController: professional,
+        userRole: UserRole.professional,
+      ),
+    );
+
+    expect(find.text('Ortopedia'), findsOneWidget);
+    expect(find.text('Aquática'), findsNothing);
+    reopenedCatalog.dispose();
     professional.dispose();
   });
 
@@ -227,6 +278,7 @@ void main() {
       ClinicSpecialtiesPage(
         catalogController: catalog,
         clinicController: clinic,
+        userRole: UserRole.clinic,
         canCreate: true,
       ),
     );
@@ -255,13 +307,78 @@ void main() {
       ClinicSpecialtiesPage(
         catalogController: catalog,
         clinicController: clinic,
-        canCreate: false,
+        userRole: UserRole.patient,
+        canCreate: true,
       ),
     );
 
     expect(find.text('Acesso restrito'), findsOneWidget);
     expect(find.text('Nova especialidade'), findsNothing);
     catalog.dispose();
+    clinic.dispose();
+  });
+
+  testWidgets('rotas protegidas bloqueiam o papel errado', (tester) async {
+    final repository = WidgetSpecialtyRepository(items: items);
+    final catalog = SpecialtyCatalogController(repository: repository);
+    final professional = ProfessionalSpecialtyController(
+      repository: repository,
+      initialId: '1',
+    );
+
+    await _pumpPage(
+      tester,
+      ProfessionalSpecialtyPage(
+        catalogController: catalog,
+        professionalController: professional,
+        userRole: UserRole.clinic,
+      ),
+    );
+    expect(
+      find.text('Esta área é exclusiva para profissionais.'),
+      findsOneWidget,
+    );
+    catalog.dispose();
+    professional.dispose();
+
+    final patientCatalog = SpecialtyCatalogController(repository: repository);
+    final patientProfessional = ProfessionalSpecialtyController(
+      repository: repository,
+      initialId: '1',
+    );
+    await _pumpPage(
+      tester,
+      ProfessionalSpecialtyPage(
+        catalogController: patientCatalog,
+        professionalController: patientProfessional,
+        userRole: UserRole.patient,
+      ),
+    );
+    expect(
+      find.text('Esta área é exclusiva para profissionais.'),
+      findsOneWidget,
+    );
+    patientCatalog.dispose();
+    patientProfessional.dispose();
+
+    final clinicCatalog = SpecialtyCatalogController(repository: repository);
+    final clinic = ClinicSpecialtyController(repository: repository);
+    await _pumpPage(
+      tester,
+      ClinicSpecialtiesPage(
+        catalogController: clinicCatalog,
+        clinicController: clinic,
+        userRole: UserRole.professional,
+        canCreate: true,
+      ),
+    );
+    expect(
+      find.text(
+        'Esta área administrativa está disponível somente para Clínica.',
+      ),
+      findsOneWidget,
+    );
+    clinicCatalog.dispose();
     clinic.dispose();
   });
 
@@ -309,6 +426,7 @@ void main() {
           ProfessionalSpecialtyPage(
             catalogController: catalog,
             professionalController: professional,
+            userRole: UserRole.professional,
           ),
         ),
       ),
@@ -338,6 +456,7 @@ void main() {
           ClinicSpecialtiesPage(
             catalogController: catalog,
             clinicController: clinic,
+            userRole: UserRole.clinic,
             canCreate: true,
           ),
         ),

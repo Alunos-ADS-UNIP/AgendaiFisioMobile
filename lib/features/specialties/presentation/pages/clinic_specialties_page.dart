@@ -4,6 +4,7 @@ import '../../../../core/theme/app_spacing.dart';
 import '../../../../core/theme/app_radius.dart';
 import '../../../../core/widgets/app_feedback.dart';
 import '../../../../core/widgets/empty_state.dart';
+import '../../../auth/domain/auth_session.dart';
 import '../../domain/entities/specialty.dart';
 import '../controllers/specialty_controller.dart';
 import '../widgets/create_specialty_dialog.dart';
@@ -13,12 +14,14 @@ class ClinicSpecialtiesPage extends StatefulWidget {
   const ClinicSpecialtiesPage({
     required this.catalogController,
     required this.clinicController,
+    required this.userRole,
     required this.canCreate,
     super.key,
   });
 
   final SpecialtyCatalogController catalogController;
   final ClinicSpecialtyController clinicController;
+  final UserRole userRole;
   final bool canCreate;
 
   @override
@@ -29,7 +32,7 @@ class _ClinicSpecialtiesPageState extends State<ClinicSpecialtiesPage> {
   @override
   void initState() {
     super.initState();
-    if (widget.canCreate &&
+    if (_canCreate &&
         widget.catalogController.state.status ==
             SpecialtyCatalogStatus.initial) {
       widget.catalogController.load();
@@ -38,7 +41,7 @@ class _ClinicSpecialtiesPageState extends State<ClinicSpecialtiesPage> {
 
   @override
   Widget build(BuildContext context) {
-    if (!widget.canCreate) {
+    if (!_canCreate) {
       return const Scaffold(
         appBar: _RestrictedAppBar(),
         body: Center(
@@ -123,6 +126,8 @@ class _ClinicSpecialtiesPageState extends State<ClinicSpecialtiesPage> {
       ),
     );
   }
+
+  bool get _canCreate => widget.userRole == UserRole.clinic && widget.canCreate;
 
   Future<void> _openCreateDialog() async {
     final created = await CreateSpecialtyDialog.show(

@@ -4,6 +4,7 @@ import '../../../../core/theme/app_spacing.dart';
 import '../../../../core/theme/app_radius.dart';
 import '../../../../core/widgets/app_feedback.dart';
 import '../../../../core/widgets/error_state.dart';
+import '../../../auth/domain/auth_session.dart';
 import '../../domain/entities/specialty.dart';
 import '../controllers/specialty_controller.dart';
 import '../widgets/specialty_primary_button.dart';
@@ -13,11 +14,13 @@ class ProfessionalSpecialtyPage extends StatefulWidget {
   const ProfessionalSpecialtyPage({
     required this.catalogController,
     required this.professionalController,
+    required this.userRole,
     super.key,
   });
 
   final SpecialtyCatalogController catalogController;
   final ProfessionalSpecialtyController professionalController;
+  final UserRole userRole;
 
   @override
   State<ProfessionalSpecialtyPage> createState() =>
@@ -30,6 +33,7 @@ class _ProfessionalSpecialtyPageState extends State<ProfessionalSpecialtyPage> {
   @override
   void initState() {
     super.initState();
+    if (widget.userRole != UserRole.professional) return;
     if (widget.catalogController.state.status ==
         SpecialtyCatalogStatus.initial) {
       widget.catalogController.load();
@@ -38,6 +42,22 @@ class _ProfessionalSpecialtyPageState extends State<ProfessionalSpecialtyPage> {
 
   @override
   Widget build(BuildContext context) {
+    if (widget.userRole != UserRole.professional) {
+      return Scaffold(
+        appBar: AppBar(title: const Text('Acesso restrito')),
+        body: SafeArea(
+          child: Center(
+            child: Padding(
+              padding: EdgeInsets.all(AppSpacing.lg),
+              child: Text(
+                'Esta área é exclusiva para profissionais.',
+                textAlign: TextAlign.center,
+              ),
+            ),
+          ),
+        ),
+      );
+    }
     return Scaffold(
       appBar: AppBar(title: const Text('Minha especialidade')),
       body: AnimatedBuilder(
@@ -142,8 +162,8 @@ class _ProfessionalSpecialtyPageState extends State<ProfessionalSpecialtyPage> {
     if (success) {
       setState(() => _pendingSelection = null);
       AppFeedback.showSuccess(context, 'Especialidade atualizada com sucesso.');
+      Navigator.of(context).pop(true);
     } else {
-      setState(() => _pendingSelection = null);
       AppFeedback.showError(
         context,
         widget.professionalController.errorMessage ??

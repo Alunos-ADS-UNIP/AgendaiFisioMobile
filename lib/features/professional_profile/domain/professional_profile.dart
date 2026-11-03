@@ -8,6 +8,7 @@ class ProfessionalProfile {
     required this.crefito,
     required this.phone,
     required this.bio,
+    this.specialtyId,
     required this.specialtyName,
     required this.isActive,
   });
@@ -18,6 +19,7 @@ class ProfessionalProfile {
   final String crefito;
   final String phone;
   final String bio;
+  final String? specialtyId;
   final String specialtyName;
   final bool isActive;
 
@@ -35,6 +37,7 @@ class ProfessionalProfile {
     crefito: crefito ?? this.crefito,
     phone: phone ?? this.phone,
     bio: bio ?? this.bio,
+    specialtyId: specialtyId,
     specialtyName: specialtyName,
     isActive: isActive,
   );
