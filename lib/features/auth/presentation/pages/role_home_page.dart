@@ -6,10 +6,16 @@ import '../../../../core/widgets/app_primary_button.dart';
 import '../../domain/auth_session.dart';
 
 class RoleHomePage extends StatelessWidget {
-  const RoleHomePage({required this.user, required this.onLogout, super.key});
+  const RoleHomePage({
+    required this.user,
+    required this.onLogout,
+    this.onOpenSpecialties,
+    super.key,
+  });
 
   final AuthenticatedUser user;
   final VoidCallback onLogout;
+  final VoidCallback? onOpenSpecialties;
 
   @override
   Widget build(BuildContext context) => Scaffold(
@@ -65,6 +71,14 @@ class RoleHomePage extends StatelessWidget {
                     textAlign: TextAlign.center,
                   ),
                   const SizedBox(height: AppSpacing.lg),
+                  if (onOpenSpecialties != null) ...[
+                    AppPrimaryButton(
+                      label: 'Especialidades',
+                      icon: Icons.spa_outlined,
+                      onPressed: onOpenSpecialties,
+                    ),
+                    const SizedBox(height: AppSpacing.sm),
+                  ],
                   AppPrimaryButton(
                     label: 'Sair da conta',
                     icon: Icons.logout,
