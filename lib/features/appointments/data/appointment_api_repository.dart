@@ -210,26 +210,37 @@ class AppointmentApiRepository
   }
 
   @override
-  Future<List<ScheduleBlock>> fetchScheduleBlocks(String professionalId) async {
+  Future<List<ScheduleBlock>> fetchScheduleBlocks({
+    required DateTime from,
+    required DateTime to,
+  }) async {
     final response = await _send(
       'GET',
-      '/api/agendamento',
-      query: {'profissionalId': professionalId, 'status': _blockedStatus},
+      '/api/agenda/bloqueios',
+      query: {
+        'inicio': from.toUtc().toIso8601String(),
+        'fim': to.toUtc().toIso8601String(),
+      },
       authenticated: true,
     );
     if (response.statusCode != 200) _throwForStatus(response.statusCode);
     try {
       return _readList(jsonDecode(response.body))
-          .where(_isBlock)
           .map((json) {
-            final id = _string(json, const ['id', 'agendamentoId']);
-            final date = DateTime.tryParse(
-              _string(json, const ['dataHora', 'dateTime']),
-            );
-            if (id.isEmpty || date == null) {
+            final id = _string(json, const ['id']);
+            final start = DateTime.tryParse(_string(json, const ['inicio']));
+            final end = DateTime.tryParse(_string(json, const ['fim']));
+            if (id.isEmpty || start == null || end == null) {
               throw const FormatException('Bloqueio inválido.');
             }
-            return ScheduleBlock(id: id, dateTime: date.toLocal());
+            return ScheduleBlock(
+              id: id,
+              start: start.toLocal(),
+              end: end.toLocal(),
+              isFullDay: _string(json, const [
+                'tipo',
+              ]).toLowerCase().startsWith('dia'),
+            );
           })
           .toList(growable: false);
     } catch (_) {
@@ -238,37 +249,46 @@ class AppointmentApiRepository
   }
 
   @override
-  Future<void> createScheduleBlock({
-    required String professionalId,
-    required DateTime dateTime,
-  }) async {
+  Future<bool> createHourBlock(DateTime start) => _createBlock(
+    '/api/agenda/bloqueios/horarios',
+    {'dataHora': start.toUtc().toIso8601String()},
+  );
+
+  @override
+  Future<bool> createDayBlock(DateTime date) {
+    String two(int v) => v.toString().padLeft(2, '0');
+    return _createBlock('/api/agenda/bloqueios/dias', {
+      'data': '${date.year}-${two(date.month)}-${two(date.day)}',
+    });
+  }
+
+  Future<bool> _createBlock(String path, Map<String, Object?> body) async {
     final response = await _send(
       'POST',
-      '/api/agendamento',
-      body: {
-        'profissionalId': professionalId,
-        'dataHora': dateTime.toUtc().toIso8601String(),
-        'observacoes': 'Fora da grade de atendimento',
-      },
+      path,
+      body: {...body, 'motivo': 'Fora da grade de atendimento'},
       authenticated: true,
     );
-    // 409: o horário já está ocupado (por um paciente ou outro bloqueio).
-    if (response.statusCode == 409) return;
+    // 409: o horário ou o dia já está ocupado (consulta ou outro bloqueio).
+    if (response.statusCode == 409) return false;
     if (response.statusCode != 200 && response.statusCode != 201) {
       _throwForStatus(response.statusCode);
     }
+    return true;
   }
 
   @override
-  Future<void> cancelScheduleBlock(String id) async {
+  Future<void> deleteScheduleBlock(String id) async {
     final response = await _send(
-      'PATCH',
-      '/api/agendamento/${Uri.encodeComponent(id)}/cancelar',
+      'DELETE',
+      '/api/agenda/bloqueios/${Uri.encodeComponent(id)}',
       authenticated: true,
     );
-    // 404/409: o bloqueio já não existe ou já foi cancelado.
-    if (response.statusCode == 404 || response.statusCode == 409) return;
-    if (response.statusCode != 200) _throwForStatus(response.statusCode);
+    // 404: o bloqueio já não existe.
+    if (response.statusCode == 404) return;
+    if (response.statusCode != 200 && response.statusCode != 204) {
+      _throwForStatus(response.statusCode);
+    }
   }
 
   @override

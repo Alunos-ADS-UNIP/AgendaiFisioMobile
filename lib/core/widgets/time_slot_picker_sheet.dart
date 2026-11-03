@@ -8,13 +8,14 @@ import '../theme/app_spacing.dart';
 /// usuário toca no horário desejado. Substitui o relógio redondo do sistema.
 ///
 /// Devolve um [TimeOfDay] ao confirmar, ou null se fechar sem escolher.
-/// Intervalo padrão de 30 min, entre [startHour] e [endHour].
+/// Horários em hora cheia (as consultas sempre começam em hora cheia), entre
+/// [startHour] e [endHour].
 class TimeSlotPickerSheet extends StatefulWidget {
   const TimeSlotPickerSheet({
     this.initial,
     this.title = 'Escolha o horário',
     this.startHour = 6,
-    this.endHour = 22,
+    this.endHour = 21,
     super.key,
   });
 
@@ -28,10 +29,12 @@ class TimeSlotPickerSheet extends StatefulWidget {
     BuildContext context, {
     TimeOfDay? initial,
     String title = 'Escolha o horário',
+    int endHour = 21,
   }) => showModalBottomSheet<TimeOfDay>(
     context: context,
     isScrollControlled: true,
-    builder: (_) => TimeSlotPickerSheet(initial: initial, title: title),
+    builder: (_) =>
+        TimeSlotPickerSheet(initial: initial, title: title, endHour: endHour),
   );
 
   @override
@@ -39,7 +42,7 @@ class TimeSlotPickerSheet extends StatefulWidget {
 }
 
 class _TimeSlotPickerSheetState extends State<TimeSlotPickerSheet> {
-  static const _stepMinutes = 30;
+  static const _stepMinutes = 60;
   late int _selected = _initialMinutes();
 
   int _initialMinutes() {

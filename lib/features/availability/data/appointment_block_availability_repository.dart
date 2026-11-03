@@ -3,40 +3,56 @@ import '../domain/availability_failure.dart';
 import '../domain/availability_models.dart';
 import '../domain/availability_repository.dart';
 
-/// Agendamento técnico "Bloqueado" que ocupa um horário fora da grade.
+/// Bloqueio de agenda do profissional (rotas /api/agenda/bloqueios).
 class ScheduleBlock {
-  const ScheduleBlock({required this.id, required this.dateTime});
+  const ScheduleBlock({
+    required this.id,
+    required this.start,
+    required this.end,
+    this.isFullDay = false,
+  });
 
   final String id;
 
-  /// Data/hora local do horário bloqueado.
-  final DateTime dateTime;
+  /// Início e fim locais do período bloqueado (fim exclusivo).
+  final DateTime start;
+  final DateTime end;
+
+  /// Bloqueio do dia inteiro; caso contrário, de uma hora.
+  final bool isFullDay;
+
+  bool covers(DateTime moment) =>
+      !moment.isBefore(start) && moment.isBefore(end);
 }
 
-/// Operações de bloqueio expostas pela API de agendamentos
-/// (POST /api/agendamento com token de profissional, GET filtrando
-/// status "Bloqueado" e PATCH /cancelar). Lança [AppointmentException].
+/// Operações das rotas de bloqueio do profissional logado. Lança
+/// [AppointmentException]. As criações devolvem false quando o horário ou o dia
+/// já está ocupado (409), por exemplo por uma consulta marcada.
 abstract interface class ScheduleBlockGateway {
-  Future<List<ScheduleBlock>> fetchScheduleBlocks(String professionalId);
-
-  Future<void> createScheduleBlock({
-    required String professionalId,
-    required DateTime dateTime,
+  Future<List<ScheduleBlock>> fetchScheduleBlocks({
+    required DateTime from,
+    required DateTime to,
   });
 
-  Future<void> cancelScheduleBlock(String id);
+  /// Bloqueia uma hora que começa em [start] (sempre em hora cheia).
+  Future<bool> createHourBlock(DateTime start);
+
+  /// Bloqueia o dia inteiro de [date].
+  Future<bool> createDayBlock(DateTime date);
+
+  Future<void> deleteScheduleBlock(String id);
 }
 
-/// Grade semanal guardada como agendamentos falsos.
+/// Grade semanal guardada como bloqueios de agenda.
 ///
-/// O backend não tem rota para a grade, então cada horário de 30 min fora dos
-/// turnos ativos, dentro da janela do seletor (06:00–22:00) e das próximas
-/// [horizonDays], vira um agendamento "Bloqueado". Assim o backend recusa
-/// (409) qualquer paciente que tente reservar esse horário.
+/// Nas próximas [horizonDays], um dia desativado vira um bloqueio de dia
+/// inteiro, e num dia com turnos cada hora fora deles (de [firstHour] a
+/// [lastHour]) vira um bloqueio de uma hora. As consultas são sempre em hora
+/// cheia, então a grade também é.
 ///
-/// Salvar compara com os bloqueios existentes: cria os que faltam e cancela
-/// os que voltaram a ficar dentro da grade. Ler reconstrói os turnos de cada
-/// dia da semana a partir dos bloqueios da próxima data daquele dia.
+/// Salvar compara com os bloqueios existentes: cria os que faltam e remove os
+/// que voltaram a ficar dentro da grade. Ler reconstrói os turnos de cada dia
+/// da semana a partir dos bloqueios da próxima data daquele dia.
 class AppointmentBlockAvailabilityRepository implements AvailabilityRepository {
   AppointmentBlockAvailabilityRepository({
     required this.gateway,
@@ -48,10 +64,9 @@ class AppointmentBlockAvailabilityRepository implements AvailabilityRepository {
   final String professionalId;
   final DateTime Function() _clock;
 
-  /// Mesma janela e intervalo do TimeSlotPickerSheet.
-  static const firstSlotMinutes = 6 * 60;
-  static const lastSlotMinutes = 22 * 60;
-  static const slotMinutes = 30;
+  /// Primeira e última hora em que uma consulta pode começar.
+  static const firstHour = 6;
+  static const lastHour = 21;
 
   /// Quantos dias à frente recebem bloqueios a cada salvamento.
   static const horizonDays = 14;
@@ -59,41 +74,41 @@ class AppointmentBlockAvailabilityRepository implements AvailabilityRepository {
   /// Requisições simultâneas ao salvar.
   static const _parallelRequests = 6;
 
-  static List<int> get _daySlots => [
-    for (var m = firstSlotMinutes; m <= lastSlotMinutes; m += slotMinutes) m,
+  static List<int> get _hours => [
+    for (var h = firstHour; h <= lastHour; h++) h,
   ];
 
   @override
   Future<WeeklySchedule> fetchWeeklySchedule() async {
-    final blocks = await _futureBlocks();
+    final blocks = await _horizonBlocks();
     // Sem nenhum bloqueio a grade nunca foi configurada.
     if (blocks.isEmpty) return WeeklySchedule.empty();
 
-    final blocked = {for (final b in blocks) _key(b.dateTime)};
     final tomorrow = _dateOnly(_clock()).add(const Duration(days: 1));
     return WeeklySchedule(
       days: [
         for (var i = 0; i < 7; i++)
-          _dayFromBlocks(tomorrow.add(Duration(days: i)), blocked),
+          _dayFromBlocks(tomorrow.add(Duration(days: i)), blocks),
       ],
     );
   }
 
-  DayAvailability _dayFromBlocks(DateTime date, Set<String> blocked) {
+  DayAvailability _dayFromBlocks(DateTime date, List<ScheduleBlock> blocks) {
     final shifts = <TimeRange>[];
     int? start;
     int? previous;
-    for (final minutes in _daySlots) {
-      final free = !blocked.contains(_key(_at(date, minutes)));
+    for (final hour in _hours) {
+      final slot = _at(date, hour);
+      final free = !blocks.any((b) => b.covers(slot));
       if (free) {
-        start ??= minutes;
-        previous = minutes;
+        start ??= hour;
+        previous = hour;
       } else if (start != null) {
-        shifts.add(_range(start, previous! + slotMinutes));
+        shifts.add(_range(start, previous! + 1));
         start = null;
       }
     }
-    if (start != null) shifts.add(_range(start, previous! + slotMinutes));
+    if (start != null) shifts.add(_range(start, previous! + 1));
     return DayAvailability(
       day: WeekDay.fromDate(date),
       enabled: shifts.isNotEmpty,
@@ -104,42 +119,67 @@ class AppointmentBlockAvailabilityRepository implements AvailabilityRepository {
   @override
   Future<void> saveWeeklySchedule(WeeklySchedule schedule) async {
     final now = _clock();
-    final existing = {
-      for (final b in await _futureBlocks()) _key(b.dateTime): b,
-    };
-
-    final wanted = <String, DateTime>{};
     final today = _dateOnly(now);
-    for (var i = 0; i < horizonDays; i++) {
-      final date = today.add(Duration(days: i));
-      final day = schedule.dayOf(WeekDay.fromDate(date));
-      for (final minutes in _daySlots) {
-        final slot = _at(date, minutes);
-        if (!slot.isAfter(now)) continue;
-        if (_isInsideShifts(day, minutes)) continue;
-        wanted[_key(slot)] = slot;
-      }
-    }
-
-    final toCreate = [
-      for (final entry in wanted.entries)
-        if (!existing.containsKey(entry.key)) entry.value,
-    ];
-    final toCancel = [
-      for (final entry in existing.entries)
-        if (!wanted.containsKey(entry.key)) entry.value.id,
-    ];
+    final blocks = await _horizonBlocks();
 
     await _guard(() async {
-      await _inBatches(toCancel, gateway.cancelScheduleBlock);
-      await _inBatches(
-        toCreate,
-        (slot) => gateway.createScheduleBlock(
-          professionalId: professionalId,
-          dateTime: slot,
-        ),
-      );
+      for (var i = 0; i < horizonDays; i++) {
+        final date = today.add(Duration(days: i));
+        final day = schedule.dayOf(WeekDay.fromDate(date));
+        final ofDate = blocks.where((b) => _dateOnly(b.start) == date).toList();
+        await _saveDate(date, day, ofDate, now);
+      }
     });
+  }
+
+  Future<void> _saveDate(
+    DateTime date,
+    DayAvailability day,
+    List<ScheduleBlock> existing,
+    DateTime now,
+  ) async {
+    final dayBlocks = existing.where((b) => b.isFullDay).toList();
+    final hourBlocks = {
+      for (final b in existing.where((b) => !b.isFullDay)) b.start.hour: b,
+    };
+    final futureHours = [
+      for (final hour in _hours)
+        if (_at(date, hour).isAfter(now)) hour,
+    ];
+
+    // Dia sem atendimento: um bloqueio só, para o dia inteiro.
+    if (!day.enabled || day.shifts.isEmpty) {
+      if (dayBlocks.isNotEmpty) return;
+      if (await gateway.createDayBlock(date)) {
+        await _inBatches(
+          hourBlocks.values.toList(),
+          (b) => gateway.deleteScheduleBlock(b.id),
+        );
+        return;
+      }
+      // O dia tem consulta marcada: bloqueia só as horas que ainda estão livres.
+      await _inBatches([
+        for (final hour in futureHours)
+          if (!hourBlocks.containsKey(hour)) hour,
+      ], (hour) => gateway.createHourBlock(_at(date, hour)));
+      return;
+    }
+
+    // Dia com turnos: uma hora bloqueada para cada hora fora deles.
+    await _inBatches(dayBlocks, (b) => gateway.deleteScheduleBlock(b.id));
+    final wanted = {
+      for (final hour in futureHours)
+        if (!_isInsideShifts(day, hour)) hour,
+    };
+    await _inBatches([
+      for (final entry in hourBlocks.entries)
+        if (!wanted.contains(entry.key) && entry.value.start.isAfter(now))
+          entry.value,
+    ], (b) => gateway.deleteScheduleBlock(b.id));
+    await _inBatches([
+      for (final hour in wanted)
+        if (!hourBlocks.containsKey(hour)) hour,
+    ], (hour) => gateway.createHourBlock(_at(date, hour)));
   }
 
   @override
@@ -150,19 +190,20 @@ class AppointmentBlockAvailabilityRepository implements AvailabilityRepository {
     const AvailabilityException(AvailabilityFailure.unavailable),
   );
 
-  Future<List<ScheduleBlock>> _futureBlocks() async {
-    final now = _clock();
-    final blocks = await _guard(
-      () => gateway.fetchScheduleBlocks(professionalId),
+  /// Bloqueios de hoje até o fim do horizonte.
+  Future<List<ScheduleBlock>> _horizonBlocks() {
+    final today = _dateOnly(_clock());
+    return _guard(
+      () => gateway.fetchScheduleBlocks(
+        from: today,
+        to: today.add(const Duration(days: horizonDays + 1)),
+      ),
     );
-    return blocks.where((b) => b.dateTime.isAfter(now)).toList();
   }
 
-  static bool _isInsideShifts(DayAvailability day, int minutes) =>
-      day.enabled &&
-      day.shifts.any(
-        (s) => s.start.totalMinutes <= minutes && minutes < s.end.totalMinutes,
-      );
+  static bool _isInsideShifts(DayAvailability day, int hour) => day.shifts.any(
+    (s) => s.start.totalMinutes <= hour * 60 && hour * 60 < s.end.totalMinutes,
+  );
 
   static Future<void> _inBatches<T>(
     List<T> items,
@@ -190,16 +231,13 @@ class AppointmentBlockAvailabilityRepository implements AvailabilityRepository {
   static DateTime _dateOnly(DateTime value) =>
       DateTime(value.year, value.month, value.day);
 
-  static DateTime _at(DateTime date, int minutes) =>
-      DateTime(date.year, date.month, date.day, minutes ~/ 60, minutes % 60);
+  static DateTime _at(DateTime date, int hour) =>
+      DateTime(date.year, date.month, date.day, hour);
 
-  static String _key(DateTime value) =>
-      '${value.year}-${value.month}-${value.day} ${value.hour}:${value.minute}';
-
-  static TimeRange _range(int start, int end) => TimeRange(
-    start: TimeOfDayValue(start ~/ 60, start % 60),
-    end: end >= 24 * 60
+  static TimeRange _range(int startHour, int endHour) => TimeRange(
+    start: TimeOfDayValue(startHour, 0),
+    end: endHour >= 24
         ? const TimeOfDayValue(23, 59)
-        : TimeOfDayValue(end ~/ 60, end % 60),
+        : TimeOfDayValue(endHour, 0),
   );
 }

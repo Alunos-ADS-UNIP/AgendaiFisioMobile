@@ -53,10 +53,15 @@ class _WeeklyScheduleFormPageState extends State<WeeklyScheduleFormPage> {
     }
   }
 
-  Future<TimeOfDayValue?> _pickTime(TimeOfDayValue initial) async {
+  /// [endHour] 22 no fim do turno: a última consulta começa às 21:00.
+  Future<TimeOfDayValue?> _pickTime(
+    TimeOfDayValue initial, {
+    int endHour = 21,
+  }) async {
     final picked = await TimeSlotPickerSheet.show(
       context,
       initial: TimeOfDay(hour: initial.hour, minute: initial.minute),
+      endHour: endHour,
     );
     return picked == null ? null : TimeOfDayValue(picked.hour, picked.minute);
   }
@@ -72,7 +77,7 @@ class _WeeklyScheduleFormPageState extends State<WeeklyScheduleFormPage> {
   }
 
   Future<void> _editEnd(WeekDay day, int index, TimeRange shift) async {
-    final value = await _pickTime(shift.end);
+    final value = await _pickTime(shift.end, endHour: 22);
     if (value == null) return;
     _controller.updateShift(
       day,
