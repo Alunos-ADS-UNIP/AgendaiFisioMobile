@@ -16,6 +16,7 @@ class TimeSlotPickerSheet extends StatefulWidget {
     this.title = 'Escolha o horário',
     this.startHour = 6,
     this.endHour = 21,
+    this.isUnavailable,
     super.key,
   });
 
@@ -24,17 +25,26 @@ class TimeSlotPickerSheet extends StatefulWidget {
   final int startHour;
   final int endHour;
 
+  /// Horários que não podem ser escolhidos (ex.: bloqueados pelo profissional
+  /// ou já ocupados): aparecem opacos e não respondem ao toque.
+  final bool Function(TimeOfDay time)? isUnavailable;
+
   /// Abre o seletor como folha inferior e devolve o horário escolhido.
   static Future<TimeOfDay?> show(
     BuildContext context, {
     TimeOfDay? initial,
     String title = 'Escolha o horário',
     int endHour = 21,
+    bool Function(TimeOfDay time)? isUnavailable,
   }) => showModalBottomSheet<TimeOfDay>(
     context: context,
     isScrollControlled: true,
-    builder: (_) =>
-        TimeSlotPickerSheet(initial: initial, title: title, endHour: endHour),
+    builder: (_) => TimeSlotPickerSheet(
+      initial: initial,
+      title: title,
+      endHour: endHour,
+      isUnavailable: isUnavailable,
+    ),
   );
 
   @override
@@ -43,13 +53,26 @@ class TimeSlotPickerSheet extends StatefulWidget {
 
 class _TimeSlotPickerSheetState extends State<TimeSlotPickerSheet> {
   static const _stepMinutes = 60;
-  late int _selected = _initialMinutes();
+  late int? _selected = _initialMinutes();
 
-  int _initialMinutes() {
+  /// Começa no horário inicial, ou no primeiro livre; nunca num indisponível.
+  int? _initialMinutes() {
     final initial = widget.initial;
-    if (initial == null) return widget.startHour * 60;
-    return initial.hour * 60 + initial.minute;
+    if (initial != null) {
+      final minutes = initial.hour * 60 + initial.minute;
+      if (!_isUnavailable(minutes)) return minutes;
+    }
+    for (final m in _slots) {
+      if (!_isUnavailable(m)) return m;
+    }
+    return null;
   }
+
+  bool _isUnavailable(int minutes) =>
+      widget.isUnavailable?.call(
+        TimeOfDay(hour: minutes ~/ 60, minute: minutes % 60),
+      ) ??
+      false;
 
   List<int> get _slots => [
     for (
@@ -76,7 +99,9 @@ class _TimeSlotPickerSheetState extends State<TimeSlotPickerSheet> {
             Text(widget.title, style: textTheme.titleLarge),
             const SizedBox(height: AppSpacing.xs),
             Text(
-              'Selecionado: ${_label(_selected)}',
+              _selected == null
+                  ? 'Nenhum horário selecionado'
+                  : 'Selecionado: ${_label(_selected!)}',
               style: textTheme.titleMedium?.copyWith(
                 color: AppColors.primaryDark,
               ),
@@ -95,7 +120,9 @@ class _TimeSlotPickerSheetState extends State<TimeSlotPickerSheet> {
                     _SlotChip(
                       label: _label(minutes),
                       selected: minutes == _selected,
-                      onTap: () => setState(() => _selected = minutes),
+                      onTap: _isUnavailable(minutes)
+                          ? null
+                          : () => setState(() => _selected = minutes),
                     ),
                 ],
               ),
@@ -118,9 +145,14 @@ class _TimeSlotPickerSheetState extends State<TimeSlotPickerSheet> {
                 const SizedBox(width: AppSpacing.sm),
                 Expanded(
                   child: FilledButton(
-                    onPressed: () => Navigator.of(context).pop(
-                      TimeOfDay(hour: _selected ~/ 60, minute: _selected % 60),
-                    ),
+                    onPressed: _selected == null
+                        ? null
+                        : () => Navigator.of(context).pop(
+                            TimeOfDay(
+                              hour: _selected! ~/ 60,
+                              minute: _selected! % 60,
+                            ),
+                          ),
                     style: FilledButton.styleFrom(
                       minimumSize: const Size(48, 52),
                       shape: const RoundedRectangleBorder(
@@ -148,30 +180,40 @@ class _SlotChip extends StatelessWidget {
 
   final String label;
   final bool selected;
-  final VoidCallback onTap;
+
+  /// Nulo quando o horário está indisponível: o chip fica opaco.
+  final VoidCallback? onTap;
 
   @override
   Widget build(BuildContext context) => Semantics(
     button: true,
     selected: selected,
-    label: 'Horário $label',
-    child: Material(
-      color: selected ? AppColors.primary : AppColors.surface,
-      shape: RoundedRectangleBorder(
-        borderRadius: AppRadius.medium,
-        side: BorderSide(
-          color: selected ? AppColors.primary : AppColors.divider,
+    enabled: onTap != null,
+    label: onTap == null ? 'Horário $label indisponível' : 'Horário $label',
+    child: Opacity(
+      opacity: onTap == null ? 0.4 : 1,
+      child: Material(
+        color: selected ? AppColors.primary : AppColors.surface,
+        shape: RoundedRectangleBorder(
+          borderRadius: AppRadius.medium,
+          side: BorderSide(
+            color: selected ? AppColors.primary : AppColors.divider,
+          ),
         ),
-      ),
-      child: InkWell(
-        onTap: onTap,
-        borderRadius: AppRadius.medium,
-        child: Center(
-          child: Text(
-            label,
-            style: Theme.of(context).textTheme.bodyLarge?.copyWith(
-              fontWeight: FontWeight.w600,
-              color: selected ? Colors.white : AppColors.textPrimary,
+        child: InkWell(
+          onTap: onTap,
+          borderRadius: AppRadius.medium,
+          child: Center(
+            child: Text(
+              label,
+              style: Theme.of(context).textTheme.bodyLarge?.copyWith(
+                fontWeight: FontWeight.w600,
+                color: selected
+                    ? Colors.white
+                    : (onTap == null
+                          ? AppColors.textDisabled
+                          : AppColors.textPrimary),
+              ),
             ),
           ),
         ),

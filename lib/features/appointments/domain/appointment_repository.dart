@@ -16,6 +16,28 @@ abstract interface class ProfessionalContactDirectory {
   Future<String> fetchProfessionalEmail(String professionalId);
 }
 
+/// Período em que o profissional não atende (bloqueio de agenda ou consulta
+/// já marcada). Horários locais, fim exclusivo.
+class UnavailablePeriod {
+  const UnavailablePeriod({required this.start, required this.end});
+
+  final DateTime start;
+  final DateTime end;
+
+  bool covers(DateTime moment) =>
+      !moment.isBefore(start) && moment.isBefore(end);
+}
+
+/// Implementado por repositórios que conseguem ler os períodos em que um
+/// fisioterapeuta não pode ser agendado, para o paciente escolher dia e hora.
+abstract interface class ProfessionalUnavailabilitySource {
+  Future<List<UnavailablePeriod>> fetchUnavailability({
+    required String professionalId,
+    required DateTime from,
+    required DateTime to,
+  });
+}
+
 abstract interface class AppointmentRepository {
   Future<List<Appointment>> fetchAppointments({AppointmentFilters filters});
   Future<Appointment> fetchAppointment(String id);

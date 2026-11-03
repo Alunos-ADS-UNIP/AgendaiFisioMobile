@@ -26,7 +26,8 @@ class AppointmentApiRepository
         AppointmentRepository,
         ScheduleBlockGateway,
         PatientProfileChecker,
-        ProfessionalContactDirectory {
+        ProfessionalContactDirectory,
+        ProfessionalUnavailabilitySource {
   AppointmentApiRepository({
     required Uri baseUri,
     required this._tokenProvider,
@@ -288,6 +289,41 @@ class AppointmentApiRepository
     if (response.statusCode == 404) return;
     if (response.statusCode != 200 && response.statusCode != 204) {
       _throwForStatus(response.statusCode);
+    }
+  }
+
+  @override
+  Future<List<UnavailablePeriod>> fetchUnavailability({
+    required String professionalId,
+    required DateTime from,
+    required DateTime to,
+  }) async {
+    final response = await _send(
+      'GET',
+      '/api/profissional/${Uri.encodeComponent(professionalId)}/indisponibilidade',
+      query: {
+        'inicio': from.toUtc().toIso8601String(),
+        'fim': to.toUtc().toIso8601String(),
+      },
+      authenticated: true,
+    );
+    if (response.statusCode != 200) _throwForStatus(response.statusCode);
+    try {
+      return _readList(jsonDecode(response.body))
+          .map((json) {
+            final start = DateTime.tryParse(_string(json, const ['inicio']));
+            final end = DateTime.tryParse(_string(json, const ['fim']));
+            if (start == null || end == null) {
+              throw const FormatException('Período inválido.');
+            }
+            return UnavailablePeriod(
+              start: start.toLocal(),
+              end: end.toLocal(),
+            );
+          })
+          .toList(growable: false);
+    } catch (_) {
+      throw const AppointmentException(AppointmentFailure.unexpected);
     }
   }
 

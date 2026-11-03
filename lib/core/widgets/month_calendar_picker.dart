@@ -28,12 +28,17 @@ class MonthCalendarPicker extends StatefulWidget {
     required this.selected,
     required this.onChanged,
     this.monthsAhead = 12,
+    this.isDayUnavailable,
     super.key,
   });
 
   final DateTime? selected;
   final ValueChanged<DateTime> onChanged;
   final int monthsAhead;
+
+  /// Dias sem nenhum horário livre (ex.: bloqueados pelo profissional): ficam
+  /// opacos e não podem ser escolhidos, como os dias passados.
+  final bool Function(DateTime date)? isDayUnavailable;
 
   @override
   State<MonthCalendarPicker> createState() => _MonthCalendarPickerState();
@@ -136,7 +141,8 @@ class _MonthCalendarPickerState extends State<MonthCalendarPicker> {
     if (!inMonth) return const SizedBox(height: 44);
 
     final date = DateTime(year, month, day);
-    final isPast = date.isBefore(today);
+    final isDisabled =
+        date.isBefore(today) || (widget.isDayUnavailable?.call(date) ?? false);
     final isSelected =
         widget.selected != null &&
         widget.selected!.year == year &&
@@ -147,13 +153,13 @@ class _MonthCalendarPickerState extends State<MonthCalendarPicker> {
       padding: const EdgeInsets.all(2),
       child: Semantics(
         button: true,
-        enabled: !isPast,
+        enabled: !isDisabled,
         selected: isSelected,
         label: '$day de ${_monthNames[month - 1]}',
         child: InkWell(
           key: ValueKey('dia-$year-$month-$day'),
           borderRadius: AppRadius.pill,
-          onTap: isPast ? null : () => widget.onChanged(date),
+          onTap: isDisabled ? null : () => widget.onChanged(date),
           child: Container(
             height: 40,
             alignment: Alignment.center,
@@ -171,7 +177,9 @@ class _MonthCalendarPickerState extends State<MonthCalendarPicker> {
               style: Theme.of(context).textTheme.bodyLarge?.copyWith(
                 color: isSelected
                     ? Colors.white
-                    : (isPast ? AppColors.textDisabled : AppColors.textPrimary),
+                    : (isDisabled
+                          ? AppColors.textDisabled
+                          : AppColors.textPrimary),
                 fontWeight: isSelected ? FontWeight.w700 : FontWeight.w400,
               ),
             ),

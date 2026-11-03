@@ -53,6 +53,68 @@ class _NewAppointmentPageState extends State<NewAppointmentPage> {
   String? _error;
   final Map<String, Future<String>> _emailCache = {};
 
+  /// Períodos em que o profissional escolhido não atende, e de quem são.
+  List<UnavailablePeriod> _unavailable = const [];
+  String? _unavailableFor;
+
+  /// Primeira e última hora em que uma consulta pode começar.
+  static const _firstHour = 6;
+  static const _lastHour = 21;
+
+  /// Quantos dias à frente o calendário mostra (12 meses), lidos em partes
+  /// porque o servidor aceita no máximo 93 dias por consulta.
+  static const _daysAhead = 366;
+  static const _daysPerRequest = 90;
+
+  Future<void> _loadUnavailability() async {
+    final professionalId = _professional?.id;
+    final repository = widget.repository;
+    if (professionalId == null ||
+        professionalId == _unavailableFor ||
+        repository is! ProfessionalUnavailabilitySource) {
+      return;
+    }
+    _unavailableFor = professionalId;
+    _unavailable = const [];
+    final source = repository as ProfessionalUnavailabilitySource;
+    final now = DateTime.now();
+    final today = DateTime(now.year, now.month, now.day);
+    try {
+      final parts = await Future.wait([
+        for (var offset = 0; offset < _daysAhead; offset += _daysPerRequest)
+          source.fetchUnavailability(
+            professionalId: professionalId,
+            from: today.add(Duration(days: offset)),
+            to: today.add(Duration(days: offset + _daysPerRequest)),
+          ),
+      ]);
+      if (!mounted || _professional?.id != professionalId) return;
+      setState(() {
+        _unavailable = [for (final part in parts) ...part];
+        if (_day != null && _isDayUnavailable(_day!)) _day = null;
+        if (_time != null && _isTimeUnavailable(_time!)) _time = null;
+      });
+    } catch (_) {
+      // Sem a lista, o servidor ainda recusa horários bloqueados ao agendar.
+      if (_unavailableFor == professionalId) _unavailableFor = null;
+    }
+  }
+
+  bool _isHourUnavailable(DateTime day, int hour) {
+    final moment = DateTime(day.year, day.month, day.day, hour);
+    return !moment.isAfter(DateTime.now()) ||
+        _unavailable.any((period) => period.covers(moment));
+  }
+
+  /// Dia sem nenhuma hora livre.
+  bool _isDayUnavailable(DateTime day) =>
+      [for (var h = _firstHour; h <= _lastHour; h++) h]
+          .every((hour) => _isHourUnavailable(day, hour));
+
+  /// Hora indisponível no dia escolhido.
+  bool _isTimeUnavailable(TimeOfDay time) =>
+      _day != null && _isHourUnavailable(_day!, time.hour);
+
   /// E-mail de contato do fisioterapeuta, buscado uma vez por profissional.
   Future<String> _emailFor(String? professionalId) {
     if (professionalId == null) return Future.value('');
@@ -149,6 +211,7 @@ class _NewAppointmentPageState extends State<NewAppointmentPage> {
         _loading = false;
         _error = null;
       });
+      if (professional != null) _loadUnavailability();
       if (professional == null &&
           specialties.isNotEmpty &&
           _specialty == null) {
@@ -215,6 +278,8 @@ class _NewAppointmentPageState extends State<NewAppointmentPage> {
       context,
       initial: _time ?? const TimeOfDay(hour: 9, minute: 0),
       title: 'Escolha o horário',
+      endHour: _lastHour,
+      isUnavailable: _isTimeUnavailable,
     );
     if (picked != null && mounted) {
       setState(() {
@@ -410,6 +475,7 @@ class _NewAppointmentPageState extends State<NewAppointmentPage> {
         _step = 2;
         _error = null;
       });
+      await _loadUnavailability();
     }
   }
 
@@ -517,8 +583,11 @@ class _NewAppointmentPageState extends State<NewAppointmentPage> {
       const SizedBox(height: AppSpacing.sm),
       MonthCalendarPicker(
         selected: _day,
+        isDayUnavailable: _isDayUnavailable,
         onChanged: (day) => setState(() {
           _day = day;
+          // O horário já escolhido pode não estar livre no novo dia.
+          if (_time != null && _isTimeUnavailable(_time!)) _time = null;
           _error = null;
         }),
       ),
