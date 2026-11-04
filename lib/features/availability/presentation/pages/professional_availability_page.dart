@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../../../../core/theme/app_spacing.dart';
 import '../../../../core/widgets/app_loading_skeleton.dart';
+import '../../../../core/widgets/app_primary_button.dart';
 import '../../../../core/widgets/empty_state.dart';
 import '../../../../core/widgets/error_state.dart';
 import '../../domain/availability_failure.dart';
@@ -53,23 +54,33 @@ class _ProfessionalAvailabilityPageState
 
   @override
   Widget build(BuildContext context) => Scaffold(
-    appBar: AppBar(
-      title: const Text('Grade de horários'),
-      actions: [
-        ListenableBuilder(
-          listenable: _controller,
-          builder: (context, _) => IconButton(
-            tooltip: 'Editar grade',
-            onPressed: _controller.isLoading ? null : _edit,
-            icon: const Icon(Icons.edit_calendar_outlined),
-          ),
-        ),
-      ],
-    ),
+    appBar: AppBar(title: const Text('Grade de horários')),
     body: AnimatedBuilder(
       animation: _controller,
       builder: (context, _) =>
           RefreshIndicator(onRefresh: _controller.load, child: _body()),
+    ),
+    // Botão fixo embaixo, sempre à vista, como o de agendar do paciente.
+    floatingActionButtonLocation: FloatingActionButtonLocation.centerFloat,
+    floatingActionButton: ListenableBuilder(
+      listenable: _controller,
+      builder: (context, _) => _controller.isUnavailable
+          ? const SizedBox.shrink()
+          : SizedBox(
+              width: MediaQuery.sizeOf(context).width - (AppSpacing.md * 2),
+              child: Material(
+                elevation: 6,
+                color: Colors.transparent,
+                borderRadius: const BorderRadius.all(Radius.circular(12)),
+                child: AppPrimaryButton(
+                  label: _controller.isEmpty
+                      ? 'Configurar horários'
+                      : 'Editar horários',
+                  icon: Icons.edit_calendar_outlined,
+                  onPressed: _controller.isLoading ? null : _edit,
+                ),
+              ),
+            ),
     ),
   );
 
@@ -113,6 +124,8 @@ class _ProfessionalAvailabilityPageState
     // ListView permite puxar para atualizar mesmo nos estados curtos.
     return ListView(
       physics: const AlwaysScrollableScrollPhysics(),
+      // Espaço no fim para o botão fixo não cobrir o último dia.
+      padding: const EdgeInsets.only(bottom: 96),
       children: [child],
     );
   }
