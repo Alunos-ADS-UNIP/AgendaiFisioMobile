@@ -10,7 +10,23 @@ class _FakeGateway implements ScheduleBlockGateway {
 
   /// Dias em que o servidor recusa o bloqueio do dia inteiro (há consulta).
   final busyDays = <DateTime>{};
+
+  /// Consultas marcadas: o servidor recusa bloquear essas horas e o dia delas.
+  final booked = <DateTime>[];
   var _nextId = 0;
+
+  bool _overlaps(DateTime start, DateTime end) =>
+      booked.any((b) => !b.isBefore(start) && b.isBefore(end)) ||
+      blocks.any((b) => b.start.isBefore(end) && b.end.isAfter(start));
+
+  @override
+  Future<List<DateTime>> fetchBookedHours({
+    required DateTime from,
+    required DateTime to,
+  }) async => [
+    for (final b in booked)
+      if (!b.isBefore(from) && b.isBefore(to)) b,
+  ];
 
   @override
   Future<List<ScheduleBlock>> fetchScheduleBlocks({
@@ -23,6 +39,7 @@ class _FakeGateway implements ScheduleBlockGateway {
 
   @override
   Future<bool> createHourBlock(DateTime start) async {
+    if (_overlaps(start, start.add(const Duration(hours: 1)))) return false;
     createdHours.add(start);
     blocks.add(
       ScheduleBlock(
@@ -36,7 +53,10 @@ class _FakeGateway implements ScheduleBlockGateway {
 
   @override
   Future<bool> createDayBlock(DateTime date) async {
-    if (busyDays.contains(date)) return false;
+    if (busyDays.contains(date) ||
+        _overlaps(date, date.add(const Duration(days: 1)))) {
+      return false;
+    }
     createdDays.add(date);
     blocks.add(
       ScheduleBlock(
@@ -167,5 +187,30 @@ void main() {
     expect(gateway.createdDays, isNot(contains(DateTime(2026, 11, 3))));
     // 06:00 a 21:00: 16 horas cheias.
     expect(gateway.createdHours.where((d) => d.day == 3), hasLength(16));
+  });
+
+  test(
+    'dia sem atendimento com consulta marcada continua desativado',
+    () async {
+      // Sexta-feira com uma consulta às 10:00.
+      gateway.booked.add(DateTime(2026, 11, 6, 10));
+
+      await repository.saveWeeklySchedule(onlyMondayMorning());
+      final schedule = await repository.fetchWeeklySchedule();
+
+      final friday = schedule.dayOf(WeekDay.friday);
+      expect(friday.enabled, isFalse);
+      expect(friday.shifts, isEmpty);
+    },
+  );
+
+  test('consulta fora do turno não vira um turno a mais', () async {
+    // Segunda que vem, 15:00: fora do turno da manhã.
+    gateway.booked.add(DateTime(2026, 11, 9, 15));
+
+    await repository.saveWeeklySchedule(onlyMondayMorning());
+    final schedule = await repository.fetchWeeklySchedule();
+
+    expect(schedule.dayOf(WeekDay.monday).shifts, [morning]);
   });
 }

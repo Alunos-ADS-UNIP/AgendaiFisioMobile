@@ -250,6 +250,31 @@ class AppointmentApiRepository
   }
 
   @override
+  Future<List<DateTime>> fetchBookedHours({
+    required DateTime from,
+    required DateTime to,
+  }) async {
+    final response = await _send(
+      'GET',
+      '/api/agendamento',
+      authenticated: true,
+    );
+    if (response.statusCode != 200) _throwForStatus(response.statusCode);
+    try {
+      // Inclui os antigos agendamentos "Bloqueado": também ocupam o horário.
+      return [
+        for (final row in _readList(jsonDecode(response.body)))
+          if (_string(row, const ['status']).toLowerCase() != 'cancelado')
+            if (DateTime.tryParse(_string(row, const ['dataHora']))?.toLocal()
+                case final start?)
+              if (!start.isBefore(from) && start.isBefore(to)) start,
+      ];
+    } catch (_) {
+      throw const AppointmentException(AppointmentFailure.unexpected);
+    }
+  }
+
+  @override
   Future<bool> createHourBlock(DateTime start) => _createBlock(
     '/api/agenda/bloqueios/horarios',
     {'dataHora': start.toUtc().toIso8601String()},

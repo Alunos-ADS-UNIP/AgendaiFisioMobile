@@ -41,6 +41,13 @@ abstract interface class ScheduleBlockGateway {
   Future<bool> createDayBlock(DateTime date);
 
   Future<void> deleteScheduleBlock(String id);
+
+  /// Início das consultas marcadas (não canceladas) do profissional logado.
+  /// Essas horas não aceitam bloqueio, então não dizem se o dia tem grade.
+  Future<List<DateTime>> fetchBookedHours({
+    required DateTime from,
+    required DateTime to,
+  });
 }
 
 /// Grade semanal guardada como bloqueios de agenda.
@@ -85,30 +92,57 @@ class AppointmentBlockAvailabilityRepository implements AvailabilityRepository {
     if (blocks.isEmpty) return WeeklySchedule.empty();
 
     final tomorrow = _dateOnly(_clock()).add(const Duration(days: 1));
+    final booked = await _bookedHours(
+      tomorrow,
+      tomorrow.add(const Duration(days: 7)),
+    );
     return WeeklySchedule(
       days: [
         for (var i = 0; i < 7; i++)
-          _dayFromBlocks(tomorrow.add(Duration(days: i)), blocks),
+          _dayFromBlocks(tomorrow.add(Duration(days: i)), blocks, booked),
       ],
     );
   }
 
-  DayAvailability _dayFromBlocks(DateTime date, List<ScheduleBlock> blocks) {
+  /// Sem a lista de consultas, a grade ainda é lida só pelos bloqueios.
+  Future<Set<DateTime>> _bookedHours(DateTime from, DateTime to) async {
+    try {
+      final starts = await gateway.fetchBookedHours(from: from, to: to);
+      return {for (final s in starts) _at(s, s.hour)};
+    } catch (_) {
+      return const {};
+    }
+  }
+
+  /// Uma hora com consulta não pode ser bloqueada: conta como parte do turno
+  /// ao redor, mas sozinha não faz o dia aparecer como dia de atendimento.
+  DayAvailability _dayFromBlocks(
+    DateTime date,
+    List<ScheduleBlock> blocks,
+    Set<DateTime> booked,
+  ) {
+    bool isBlocked(int hour) => blocks.any((b) => b.covers(_at(date, hour)));
+    bool isBooked(int hour) => booked.contains(_at(date, hour));
+    // Cada sequência de horas sem bloqueio vira um turno, desde que tenha ao
+    // menos uma hora sem consulta.
     final shifts = <TimeRange>[];
     int? start;
-    int? previous;
-    for (final hour in _hours) {
-      final slot = _at(date, hour);
-      final free = !blocks.any((b) => b.covers(slot));
-      if (free) {
-        start ??= hour;
-        previous = hour;
-      } else if (start != null) {
-        shifts.add(_range(start, previous! + 1));
-        start = null;
-      }
+    var hasOpenHour = false;
+    void close(int end) {
+      if (start != null && hasOpenHour) shifts.add(_range(start!, end));
+      start = null;
+      hasOpenHour = false;
     }
-    if (start != null) shifts.add(_range(start, previous! + 1));
+
+    for (final hour in _hours) {
+      if (isBlocked(hour)) {
+        close(hour);
+        continue;
+      }
+      start ??= hour;
+      if (!isBooked(hour)) hasOpenHour = true;
+    }
+    close(lastHour + 1);
     return DayAvailability(
       day: WeekDay.fromDate(date),
       enabled: shifts.isNotEmpty,
