@@ -433,6 +433,8 @@ class _NewAppointmentPageState extends State<NewAppointmentPage> {
             ),
           ),
     floatingActionButtonLocation: FloatingActionButtonLocation.centerFloat,
+    // O botão aparece direto, sem girar nem crescer.
+    floatingActionButtonAnimator: FloatingActionButtonAnimator.noAnimation,
     floatingActionButton: _loading || (_error != null && _specialties.isEmpty)
         ? null
         : SizedBox(

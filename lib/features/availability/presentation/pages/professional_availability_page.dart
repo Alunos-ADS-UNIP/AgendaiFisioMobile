@@ -62,6 +62,8 @@ class _ProfessionalAvailabilityPageState
     ),
     // Botão fixo embaixo, sempre à vista, como o de agendar do paciente.
     floatingActionButtonLocation: FloatingActionButtonLocation.centerFloat,
+    // O botão aparece direto, sem girar nem crescer.
+    floatingActionButtonAnimator: FloatingActionButtonAnimator.noAnimation,
     floatingActionButton: ListenableBuilder(
       listenable: _controller,
       builder: (context, _) => _controller.isUnavailable
