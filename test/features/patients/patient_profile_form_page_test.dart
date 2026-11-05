@@ -68,6 +68,21 @@ String _textOf(WidgetTester tester, String label) =>
     tester.widget<TextFormField>(_field(label)).controller!.text;
 
 void main() {
+  testWidgets('campo de nome abre o teclado com maiúscula nas palavras', (
+    tester,
+  ) async {
+    _useTallScreen(tester);
+    await tester.pumpWidget(_page(_blankPatient));
+
+    final nome = tester.widget<TextField>(
+      find.descendant(
+        of: _field('Nome completo'),
+        matching: find.byType(TextField),
+      ),
+    );
+    expect(nome.textCapitalization, TextCapitalization.words);
+  });
+
   group('dropdowns de sexo e estado civil', () {
     testWidgets('valor da API fora da lista de opções não quebra a tela', (
       tester,

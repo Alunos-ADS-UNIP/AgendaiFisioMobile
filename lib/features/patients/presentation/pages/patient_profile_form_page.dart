@@ -289,6 +289,7 @@ class _PatientProfileFormPageState extends State<PatientProfileFormPage> {
                 AppTextField(
                   label: 'Nome completo',
                   controller: _nomeController,
+                  textCapitalization: TextCapitalization.words,
                   textInputAction: TextInputAction.next,
                   validator: (v) => (v == null || v.trim().isEmpty)
                       ? 'Informe seu nome completo.'
