@@ -156,11 +156,15 @@ class _BrandHeader extends StatelessWidget {
   Widget build(BuildContext context) => Column(
     children: [
       Container(
-        width: 72,
-        height: 72,
+        width: 300,
+        height: 100,
+        padding: const EdgeInsets.symmetric(
+          horizontal: AppSpacing.md,
+          vertical: AppSpacing.sm,
+        ),
         decoration: BoxDecoration(
           color: Colors.white,
-          borderRadius: BorderRadius.circular(22),
+          borderRadius: AppRadius.large,
           boxShadow: const [
             BoxShadow(
               color: Color(0x26000000),
@@ -169,19 +173,13 @@ class _BrandHeader extends StatelessWidget {
             ),
           ],
         ),
-        child: const Icon(
-          Icons.health_and_safety_rounded,
-          color: AppColors.primary,
-          size: 40,
+        child: Image.asset(
+          'assets/images/agendai_fisio_logo.png',
+          semanticLabel: 'Logo AgendaiFisio',
+          fit: BoxFit.contain,
         ),
       ),
       const SizedBox(height: AppSpacing.md),
-      Text(
-        'AgendaiFisio',
-        style: Theme.of(context).textTheme.headlineMedium
-            ?.copyWith(color: Colors.white, fontSize: 28),
-      ),
-      const SizedBox(height: AppSpacing.xxs),
       Text(
         'Seu cuidado, no seu tempo.',
         style: Theme.of(context).textTheme.bodyMedium
