@@ -70,16 +70,7 @@ class _PatientProfilePageState extends State<PatientProfilePage> {
     final controller = widget.controller;
 
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('Meu perfil'),
-        actions: [
-          IconButton(
-            icon: const Icon(Icons.logout),
-            tooltip: 'Sair',
-            onPressed: widget.onLogout,
-          ),
-        ],
-      ),
+      appBar: AppBar(title: const Text('Perfil')),
       body: SafeArea(child: _buildBody(context, controller)),
     );
   }

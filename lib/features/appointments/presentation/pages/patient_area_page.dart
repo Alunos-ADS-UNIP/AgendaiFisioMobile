@@ -34,12 +34,15 @@ class _PatientAreaPageState extends State<PatientAreaPage> {
 
   Future<void> _select(int index) async {
     if (index == 1) {
-      final created = await Navigator.of(context).push<bool>(
+      final result = await Navigator.of(context).push<Object?>(
         MaterialPageRoute(
           builder: (_) => NewAppointmentPage(repository: widget.repository),
         ),
       );
-      if (mounted && created == true) {
+      if (!mounted) return;
+      if (result == completeProfileResult) {
+        setState(() => _selected = 3);
+      } else if (result == true) {
         setState(() {
           _selected = 2;
           _revision++;

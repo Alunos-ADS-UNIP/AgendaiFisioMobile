@@ -20,7 +20,7 @@ void main() {
     status: AppointmentStatus.confirmed,
   );
 
-  testWidgets('home mostra próxima consulta e atalhos do paciente', (
+  testWidgets('home mostra próxima consulta sem atalhos do paciente', (
     tester,
   ) async {
     await tester.pumpWidget(
@@ -34,11 +34,11 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('Olá, Ana!'), findsOneWidget);
-    expect(find.text('Próxima consulta'), findsOneWidget);
+    expect(find.text('Próximas consultas'), findsOneWidget);
     expect(find.text('Dra. Marina Lopes'), findsOneWidget);
-    expect(find.text('Agendar consulta'), findsOneWidget);
-    expect(find.text('Minha agenda'), findsOneWidget);
-    expect(find.text('Histórico de consultas'), findsOneWidget);
+    expect(find.text('Agendar consulta'), findsNothing);
+    expect(find.text('Minha agenda'), findsNothing);
+    expect(find.text('Histórico de consultas'), findsNothing);
   });
 
   testWidgets(
@@ -59,8 +59,8 @@ void main() {
       await tester.pumpAndSettle();
 
       expect(find.text('Detalhes'), findsOneWidget);
-      expect(find.text('Observações'), findsNothing);
-      expect(find.text('CREFITO'), findsNothing);
+      expect(find.text('Sintomas'), findsNothing);
+      expect(find.text('CREFITO'), findsOneWidget);
     },
   );
 
@@ -72,10 +72,7 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    expect(
-      find.text('Você ainda não tem uma próxima consulta'),
-      findsOneWidget,
-    );
+    expect(find.text('Nenhuma consulta encontrada.'), findsOneWidget);
   });
 
   testWidgets('home ignora consulta futura cancelada', (tester) async {
@@ -97,22 +94,6 @@ void main() {
 
     expect(find.text('Dra. Marina Lopes'), findsOneWidget);
     expect(find.text('Profissional cancelado'), findsNothing);
-  });
-
-  testWidgets('histórico ausente não reutiliza a agenda futura', (
-    tester,
-  ) async {
-    await tester.pumpWidget(
-      MaterialApp(
-        home: PatientHomePage(repository: _FakeRepository([nextAppointment])),
-      ),
-    );
-    await tester.pumpAndSettle();
-    await tester.tap(find.text('Histórico de consultas'));
-    await tester.pumpAndSettle();
-
-    expect(find.text('Histórico ainda não conectado'), findsOneWidget);
-    expect(find.text('Dra. Marina Lopes'), findsNothing);
   });
 }
 

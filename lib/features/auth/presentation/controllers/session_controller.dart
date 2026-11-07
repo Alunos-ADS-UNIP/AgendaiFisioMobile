@@ -122,7 +122,7 @@ class SessionController extends ChangeNotifier {
 
   /// Chamado quando a API recusa o token (401). Encerra a sessão e marca que
   /// foi expiração, para o login avisar o usuário.
-    Future<void> expireSession() async {
+  Future<void> expireSession() async {
     final shouldNotify = _session != null || _sessionExpired;
     await _endSession();
     if (shouldNotify) {

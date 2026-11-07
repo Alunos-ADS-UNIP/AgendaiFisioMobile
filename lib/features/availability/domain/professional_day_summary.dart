@@ -31,15 +31,16 @@ class ProfessionalDaySummary {
         .where((a) => a.status != AppointmentStatus.cancelled)
         .length;
 
-    final upcoming = appointments
-        .where((a) => a.dateTime.isAfter(now))
-        .where(
-          (a) =>
-              a.status == AppointmentStatus.scheduled ||
-              a.status == AppointmentStatus.confirmed,
-        )
-        .toList()
-      ..sort((a, b) => a.dateTime.compareTo(b.dateTime));
+    final upcoming =
+        appointments
+            .where((a) => a.dateTime.isAfter(now))
+            .where(
+              (a) =>
+                  a.status == AppointmentStatus.scheduled ||
+                  a.status == AppointmentStatus.confirmed,
+            )
+            .toList()
+          ..sort((a, b) => a.dateTime.compareTo(b.dateTime));
 
     return ProfessionalDaySummary(
       todayCount: todayCount,

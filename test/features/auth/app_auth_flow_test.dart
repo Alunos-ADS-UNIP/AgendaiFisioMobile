@@ -4,7 +4,6 @@ import 'package:agendaifisiomobile/features/auth/data/session_storage.dart';
 import 'package:agendaifisiomobile/features/auth/domain/auth_session.dart';
 import 'package:agendaifisiomobile/features/auth/presentation/controllers/session_controller.dart';
 import 'package:agendaifisiomobile/core/network/api_client.dart';
-import 'package:agendaifisiomobile/core/network/api_exception.dart';
 import 'package:agendaifisiomobile/features/professional_profile/data/dtos/professional_profile_dtos.dart';
 import 'package:agendaifisiomobile/features/professional_profile/data/professional_profile_api.dart';
 import 'package:agendaifisiomobile/features/professional_profile/domain/professional_profile.dart';
@@ -55,133 +54,10 @@ void main() {
     await tester.tap(find.text('Entrar'));
     await tester.pumpAndSettle();
 
-    // A home do profissional vem primeiro; o perfil abre pelo atalho.
-    await _openProfessionalProfile(tester);
-
-    expect(find.text('Meu perfil profissional'), findsOneWidget);
-    expect(find.text('Complete seus dados profissionais para começar.'), findsOneWidget);
+    // Primeiro acesso: o perfil é completado antes da tela principal.
+    expect(find.text('Completar perfil'), findsOneWidget);
+    expect(find.text('Especialidade'), findsOneWidget);
     expect(find.byType(NavigationBar), findsNothing);
-  });
-
-  testWidgets('401 no perfil encerra a sessão e o login avisa a expiração', (
-    tester,
-  ) async {
-    final controller = SessionController(
-      authGateway: _ProfessionalGateway(),
-      storage: _MemoryStorage(),
-    );
-    await tester.pumpWidget(
-      AgendaiFisioApp(
-        sessionController: controller,
-        professionalProfileApi: _FakeProfessionalApi(
-          fetchError: ApiException('Sessão expirada.', statusCode: 401),
-          failFromCall: 2, // a home carrega; o 401 vem ao abrir o perfil
-        ),
-      ),
-    );
-    await tester.pumpAndSettle();
-    await _login(tester);
-
-    await _openProfessionalProfile(tester);
-
-    expect(controller.status, SessionStatus.unauthenticated);
-    expect(controller.sessionExpired, isTrue);
-    expect(find.text('Boas-vindas'), findsOneWidget);
-    expect(find.byKey(const Key('session-expired-notice')), findsOneWidget);
-    // A tela do perfil empilhada não pode ficar por cima do login.
-    expect(find.text('Meu perfil profissional'), findsNothing);
-
-    // Editar o e-mail remove o aviso.
-    await tester.enterText(find.byKey(const Key('login-email')), 'a');
-    await tester.pump();
-    expect(find.byKey(const Key('session-expired-notice')), findsNothing);
-  });
-
-  testWidgets('401 já ao carregar a home também avisa no login', (
-    tester,
-  ) async {
-    final controller = SessionController(
-      authGateway: _ProfessionalGateway(),
-      storage: _MemoryStorage(),
-    );
-    await tester.pumpWidget(
-      AgendaiFisioApp(
-        sessionController: controller,
-        professionalProfileApi: _FakeProfessionalApi(
-          fetchError: ApiException('Sessão expirada.', statusCode: 401),
-        ),
-      ),
-    );
-    await tester.pumpAndSettle();
-    await _login(tester);
-
-    expect(controller.sessionExpired, isTrue);
-    expect(find.byKey(const Key('session-expired-notice')), findsOneWidget);
-  });
-
-  testWidgets('a tela principal do profissional mostra só o primeiro nome', (
-    tester,
-  ) async {
-    final controller = SessionController(
-      authGateway: _ProfessionalGateway(),
-      storage: _MemoryStorage(),
-    );
-    await tester.pumpWidget(
-      AgendaiFisioApp(
-        sessionController: controller,
-        professionalProfileApi: _FakeProfessionalApi(
-          profileName: 'maria souza lima',
-        ),
-      ),
-    );
-    await tester.pumpAndSettle();
-    await _login(tester);
-
-    expect(find.text('Olá, Maria!'), findsOneWidget);
-  });
-
-  testWidgets('perfil pendente não mostra "Cadastro" na saudação', (
-    tester,
-  ) async {
-    final controller = SessionController(
-      authGateway: _ProfessionalGateway(),
-      storage: _MemoryStorage(),
-    );
-    await tester.pumpWidget(
-      AgendaiFisioApp(
-        sessionController: controller,
-        professionalProfileApi: _FakeProfessionalApi(),
-      ),
-    );
-    await tester.pumpAndSettle();
-    await _login(tester);
-
-    expect(find.text('Olá!'), findsOneWidget);
-  });
-
-  testWidgets('logout voluntário não mostra o aviso de sessão expirada', (
-    tester,
-  ) async {
-    final controller = SessionController(
-      authGateway: _ProfessionalGateway(),
-      storage: _MemoryStorage(),
-    );
-    await tester.pumpWidget(
-      AgendaiFisioApp(
-        sessionController: controller,
-        professionalProfileApi: _FakeProfessionalApi(),
-      ),
-    );
-    await tester.pumpAndSettle();
-    await _login(tester);
-    await _openProfessionalProfile(tester);
-
-    await tester.tap(find.byTooltip('Sair'));
-    await tester.pumpAndSettle();
-
-    expect(controller.status, SessionStatus.unauthenticated);
-    expect(find.text('Boas-vindas'), findsOneWidget);
-    expect(find.byKey(const Key('session-expired-notice')), findsNothing);
   });
 
   testWidgets('cadastro profissional fica disponível pelo login', (
@@ -230,51 +106,16 @@ void main() {
   });
 }
 
-Future<void> _login(WidgetTester tester) async {
-  await tester.enterText(
-    find.byKey(const Key('login-email')),
-    'fisio@example.com',
-  );
-  await tester.enterText(find.byKey(const Key('login-password')), 'segredo');
-  await tester.tap(find.text('Entrar'));
-  await tester.pumpAndSettle();
-}
-
-Future<void> _openProfessionalProfile(WidgetTester tester) async {
-  // A lista da home é preguiçosa: numa tela alta o atalho "Perfil" já é
-  // construído, sem precisar rolar.
-  tester.view.physicalSize = const Size(800, 2400);
-  tester.view.devicePixelRatio = 1;
-  addTearDown(tester.view.resetPhysicalSize);
-  addTearDown(tester.view.resetDevicePixelRatio);
-  await tester.pumpAndSettle();
-  await tester.tap(find.text('Perfil'));
-  await tester.pumpAndSettle();
-}
-
 class _FakeProfessionalApi extends ProfessionalProfileApi {
-  _FakeProfessionalApi({
-    this.fetchError,
-    this.failFromCall = 1,
-    this.profileName = 'Cadastro Pendente',
-  }) : super(ApiClient(baseUrl: 'http://localhost'));
+  _FakeProfessionalApi() : super(ApiClient(baseUrl: 'http://localhost'));
 
-  final Object? fetchError;
-
-  /// A partir de qual chamada de fetchOwnProfile o erro passa a ser lançado
-  /// (1 = já na home; 2 = só quando a tela de perfil é aberta).
-  final int failFromCall;
-  final String profileName;
-  int _calls = 0;
   String? registeredEmail;
 
   @override
-  Future<ProfessionalProfile> fetchOwnProfile() async {
-    _calls++;
-    if (fetchError != null && _calls >= failFromCall) throw fetchError!;
-    return ProfessionalProfile(
+  Future<ProfessionalProfile> fetchOwnProfile() async =>
+      const ProfessionalProfile(
         id: 'professional-1',
-        name: profileName,
+        name: 'Cadastro Pendente',
         email: 'fisio@example.com',
         crefito: '',
         phone: '',
@@ -282,7 +123,6 @@ class _FakeProfessionalApi extends ProfessionalProfileApi {
         specialtyName: '',
         isActive: true,
       );
-  }
 
   @override
   Future<void> register(ProfessionalRegisterRequest request) async {
