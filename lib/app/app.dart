@@ -21,7 +21,6 @@ import '../features/auth/data/session_storage.dart';
 import '../features/auth/domain/auth_session.dart';
 import '../features/auth/presentation/controllers/session_controller.dart';
 import '../features/auth/presentation/pages/login_page.dart';
-import '../features/auth/presentation/pages/role_home_page.dart';
 import '../features/history/data/history_api_repository.dart';
 import '../features/history/domain/history_repository.dart';
 import '../features/patients/data/patient_api.dart';
@@ -37,6 +36,12 @@ import '../features/professional_profile/presentation/controllers/professional_r
 import '../features/professional_profile/presentation/pages/professional_profile_form_page.dart';
 import '../features/professional_profile/presentation/pages/professional_profile_page.dart';
 import '../features/professional_profile/presentation/pages/professional_register_page.dart';
+import '../features/specialties/data/specialty_api_client.dart';
+import '../features/specialties/data/specialty_api_repository.dart';
+import '../features/specialties/domain/repositories/specialty_repository.dart';
+import '../features/specialties/presentation/controllers/specialty_controller.dart';
+import '../features/specialties/presentation/pages/professional_specialty_page.dart';
+import '../features/specialties/presentation/pages/specialty_list_page.dart';
 
 class AgendaiFisioApp extends StatefulWidget {
   const AgendaiFisioApp({
@@ -46,6 +51,7 @@ class AgendaiFisioApp extends StatefulWidget {
     this.patientName,
     this.patientProfileBuilder,
     this.professionalProfileApi,
+    this.specialtyRepository,
     this.showComponentCatalog = false,
     super.key,
   });
@@ -58,6 +64,7 @@ class AgendaiFisioApp extends StatefulWidget {
   final String? patientName;
   final WidgetBuilder? patientProfileBuilder;
   final ProfessionalProfileApi? professionalProfileApi;
+  final SpecialtyRepository? specialtyRepository;
   final bool showComponentCatalog;
 
   @override
@@ -69,6 +76,7 @@ class _AgendaiFisioAppState extends State<AgendaiFisioApp> {
   ApiClient? _apiClient;
   PatientApi? _patientApi;
   ProfessionalProfileApi? _professionalProfileApi;
+  SpecialtyRepository? _specialtyRepository;
   AppointmentApiRepository? _appointmentRepository;
   HistoryApiRepository? _historyRepository;
   bool _ownsSessionController = false;
@@ -95,6 +103,14 @@ class _AgendaiFisioAppState extends State<AgendaiFisioApp> {
     _patientApi = PatientApi(_apiClient!);
     _professionalProfileApi =
         widget.professionalProfileApi ?? ProfessionalProfileApi(_apiClient!);
+    _specialtyRepository =
+        widget.specialtyRepository ??
+        SpecialtyApiRepository(
+          ApiSpecialtyHttpClient(
+            apiClient: _apiClient!,
+            onUnauthorized: session.expireSession,
+          ),
+        );
     _appointmentRepository = AppointmentApiRepository(
       baseUri: Uri.parse(ApiConfig.baseUrl),
       tokenProvider: session.tokenProvider,
@@ -171,6 +187,7 @@ class _AgendaiFisioAppState extends State<AgendaiFisioApp> {
         SessionStatus.authenticating => LoginPage(
           controller: session,
           onCreateAccount: () => _openRegistration(context),
+          onOpenSpecialties: () => _openPublicSpecialties(context),
         ),
         SessionStatus.authenticated => _authenticatedHome(session),
       },
@@ -184,12 +201,7 @@ class _AgendaiFisioAppState extends State<AgendaiFisioApp> {
         key: ValueKey(user.userId),
         api: _professionalProfileApi!,
         repository: _appointmentRepository!,
-        onLogout: () => unawaited(session.logout()),
-      );
-    }
-    if (user.role != UserRole.patient) {
-      return RoleHomePage(
-        user: user,
+        specialtyRepository: _specialtyRepository!,
         onLogout: () => unawaited(session.logout()),
       );
     }
@@ -202,6 +214,24 @@ class _AgendaiFisioAppState extends State<AgendaiFisioApp> {
       onLogout: () => unawaited(session.logout()),
       profileBuilder: (context) => _buildPatientProfile(context, session),
     );
+  }
+
+  Future<void> _openPublicSpecialties(BuildContext context) async {
+    final controller = SpecialtyCatalogController(
+      repository: _specialtyRepository!,
+    );
+    try {
+      await Navigator.of(context).push<void>(
+        MaterialPageRoute(
+          builder: (_) => SpecialtyListPage(
+            controller: controller,
+            repository: _specialtyRepository,
+          ),
+        ),
+      );
+    } finally {
+      WidgetsBinding.instance.addPostFrameCallback((_) => controller.dispose());
+    }
   }
 
   Widget _buildPatientProfile(BuildContext context, SessionController session) {
@@ -395,12 +425,14 @@ class _ProfessionalHome extends StatefulWidget {
   const _ProfessionalHome({
     required this.api,
     required this.repository,
+    required this.specialtyRepository,
     required this.onLogout,
     super.key,
   });
 
   final ProfessionalProfileApi api;
   final AppointmentRepository repository;
+  final SpecialtyRepository specialtyRepository;
   final VoidCallback onLogout;
 
   @override
@@ -427,6 +459,33 @@ class _ProfessionalHomeState extends State<_ProfessionalHome> {
     if (_logoutRequested) return;
     _logoutRequested = true;
     widget.onLogout();
+  }
+
+  Future<void> _openSpecialty() async {
+    final catalogController = SpecialtyCatalogController(
+      repository: widget.specialtyRepository,
+    );
+    final professionalController = ProfessionalSpecialtyController(
+      repository: widget.specialtyRepository,
+      initialId: _controller.profile?.specialtyId,
+    );
+    try {
+      final changed = await Navigator.of(context).push<bool>(
+        MaterialPageRoute(
+          builder: (_) => ProfessionalSpecialtyPage(
+            catalogController: catalogController,
+            professionalController: professionalController,
+            userRole: UserRole.professional,
+          ),
+        ),
+      );
+      if (changed == true && mounted) await _controller.load();
+    } finally {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        catalogController.dispose();
+        professionalController.dispose();
+      });
+    }
   }
 
   /// Primeiro acesso: o perfil precisa ser completado antes da tela principal.
@@ -499,6 +558,7 @@ class _ProfessionalHomeState extends State<_ProfessionalHome> {
         profileBuilder: (_) => ProfessionalProfilePage(
           controller: _controller,
           onLogout: widget.onLogout,
+          onChangeSpecialty: _openSpecialty,
           specialtyRepository: widget.repository,
         ),
       );
