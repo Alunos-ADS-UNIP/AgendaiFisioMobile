@@ -12,11 +12,13 @@ class LoginPage extends StatefulWidget {
   const LoginPage({
     required this.controller,
     required this.onCreateAccount,
+    this.onOpenSpecialties,
     super.key,
   });
 
   final SessionController controller;
   final VoidCallback onCreateAccount;
+  final VoidCallback? onOpenSpecialties;
 
   @override
   State<LoginPage> createState() => _LoginPageState();
@@ -115,6 +117,7 @@ class _LoginPageState extends State<LoginPage> {
                               onChanged: (_) => widget.controller.clearError(),
                               onSubmit: _submit,
                               onCreateAccount: widget.onCreateAccount,
+                              onOpenSpecialties: widget.onOpenSpecialties,
                             ),
                             const SizedBox(height: AppSpacing.lg),
                             const _SecurityNote(),
@@ -204,6 +207,7 @@ class _LoginCard extends StatelessWidget {
     required this.onChanged,
     required this.onSubmit,
     required this.onCreateAccount,
+    this.onOpenSpecialties,
   });
 
   final GlobalKey<FormState> formKey;
@@ -219,6 +223,7 @@ class _LoginCard extends StatelessWidget {
   final ValueChanged<String> onChanged;
   final VoidCallback onSubmit;
   final VoidCallback onCreateAccount;
+  final VoidCallback? onOpenSpecialties;
 
   @override
   Widget build(BuildContext context) => Container(
@@ -317,6 +322,14 @@ class _LoginCard extends StatelessWidget {
                 ),
               ],
             ),
+            if (onOpenSpecialties != null) ...[
+              const SizedBox(height: AppSpacing.xs),
+              TextButton.icon(
+                onPressed: isLoading ? null : onOpenSpecialties,
+                icon: const Icon(Icons.spa_outlined),
+                label: const Text('Consultar especialidades'),
+              ),
+            ],
           ],
         ),
       ),

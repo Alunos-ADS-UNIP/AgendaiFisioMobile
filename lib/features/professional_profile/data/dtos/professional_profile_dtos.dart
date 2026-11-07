@@ -84,6 +84,7 @@ ProfessionalProfile professionalProfileFromJson(
     throw const FormatException('Detalhe profissional inválido.');
   }
   final specialty = json['especialidade'];
+  final specialtyId = specialty is Map ? specialty['id']?.toString() : null;
   final specialtyName = specialty is Map
       ? specialty['nome']?.toString() ?? ''
       : '';
@@ -94,6 +95,7 @@ ProfessionalProfile professionalProfileFromJson(
     crefito: json['crefito']?.toString() ?? '',
     phone: json['telefone']?.toString() ?? '',
     bio: json['bio']?.toString() ?? '',
+    specialtyId: specialtyId,
     specialtyName: specialtyName,
     isActive: json['ativo'] == true,
   );

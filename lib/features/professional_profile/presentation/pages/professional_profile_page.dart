@@ -42,7 +42,13 @@ class _ProfessionalProfilePageState extends State<ProfessionalProfilePage> {
   void initState() {
     super.initState();
     widget.controller.addListener(_onChanged);
-    widget.controller.load();
+    // O mesmo controller já alimenta a home. Notificá-lo durante a montagem
+    // desta rota causava "setState during build" ao abrir o perfil.
+    if (widget.controller.profile == null) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) widget.controller.load();
+      });
+    }
   }
 
   @override
@@ -87,7 +93,7 @@ class _ProfessionalProfilePageState extends State<ProfessionalProfilePage> {
 
   @override
   Widget build(BuildContext context) => Scaffold(
-    appBar: AppBar(title: const Text('Perfil profissional')),
+    appBar: AppBar(title: const Text('Meu perfil profissional')),
     body: SafeArea(child: _body(context)),
   );
 

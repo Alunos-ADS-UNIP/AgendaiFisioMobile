@@ -2,7 +2,7 @@
 ///
 /// OBJETIVO DA FEATURE:
 /// Implementar o catálogo reutilizável de Especialidades, o seletor usado por
-/// outras features, o vínculo ao perfil profissional e a criação pela Clínica.
+/// outras features e o vínculo ao perfil profissional.
 ///
 /// TELAS E COMPONENTES QUE DAVI DEVE CRIAR:
 /// - `presentation/pages/specialty_list_page.dart`: GET /api/especialidade; lista
@@ -14,22 +14,17 @@
 /// - `presentation/pages/professional_specialty_page.dart`: mostrar especialidade
 ///   atual e integrar PUT /api/profissional/especialidade com
 ///   {"especialidadeId":"..."}.
-/// - `presentation/pages/clinic_specialties_page.dart`: lista com ação Nova
-///   especialidade visível apenas para Clínica.
-/// - `presentation/widgets/create_specialty_dialog.dart`: integrar POST
-///   /api/especialidade e incluir o item retornado no catálogo sem duplicar.
 ///
 /// ROTAS:
 /// - GET /api/especialidade
 /// - GET /api/especialidade/{id}
 /// - PUT /api/profissional/especialidade
-/// - POST /api/especialidade (somente Clínica)
 ///
 /// ERROS E REGRAS:
 /// - A listagem deve funcionar antes do login.
 /// - Tratar 400, 404 e 409 com mensagens específicas.
 /// - Uma especialidade duplicada não aparece duas vezes na memória.
-/// - Profissional pode selecionar/trocar; Paciente apenas consulta; Clínica cria.
+/// - Profissional pode selecionar/trocar; Paciente apenas consulta.
 ///
 /// CRITÉRIOS DE CONCLUSÃO:
 /// - Um único picker é reutilizado pelas outras features.

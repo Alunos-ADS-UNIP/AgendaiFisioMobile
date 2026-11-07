@@ -1,19 +1,16 @@
 enum UserRole {
   patient,
-  professional,
-  admin;
+  professional;
 
   static UserRole fromApi(String value) => switch (value.trim().toLowerCase()) {
     'paciente' => UserRole.patient,
     'profissional' => UserRole.professional,
-    'admin' || 'administrador' => UserRole.admin,
     _ => throw const FormatException('Perfil de usuário inválido.'),
   };
 
   String get label => switch (this) {
     UserRole.patient => 'Paciente',
     UserRole.professional => 'Profissional',
-    UserRole.admin => 'Administrador',
   };
 }
 
