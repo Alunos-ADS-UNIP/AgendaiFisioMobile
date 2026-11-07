@@ -59,9 +59,7 @@ void main() {
       tester,
     ) async {
       final gate = Completer<http.Response>();
-      final controller = PatientProfileController(
-        _api((_) => gate.future),
-      );
+      final controller = PatientProfileController(_api((_) => gate.future));
 
       await tester.pumpWidget(
         _profilePage(controller, onLogout: () {}, onSessionExpired: () {}),

@@ -27,6 +27,10 @@ class AppTextField extends StatelessWidget {
     this.readOnly = false,
     this.onTap,
     this.textCapitalization = TextCapitalization.none,
+    this.autovalidateMode,
+    this.prefixText,
+    this.highlightError = false,
+    this.suffixText,
     super.key,
   });
 
@@ -53,6 +57,11 @@ class AppTextField extends StatelessWidget {
   /// abrir com a primeira letra maiúscula.
   final TextCapitalization textCapitalization;
 
+  final AutovalidateMode? autovalidateMode;
+  final String? prefixText;
+  final bool highlightError;
+  final String? suffixText;
+
   @override
   Widget build(BuildContext context) {
     return TextFormField(
@@ -70,12 +79,25 @@ class AppTextField extends StatelessWidget {
       readOnly: readOnly,
       onTap: onTap,
       textCapitalization: textCapitalization,
+      autovalidateMode: autovalidateMode,
       decoration: InputDecoration(
         labelText: label,
         hintText: hint,
         prefixIcon: prefixIcon == null ? null : Icon(prefixIcon),
+        prefixText: prefixText,
         suffixIcon: suffixIcon,
+        suffixText: suffixText,
         errorText: errorText,
+        enabledBorder: highlightError
+            ? const OutlineInputBorder(
+                borderSide: BorderSide(color: Colors.red),
+              )
+            : null,
+        focusedBorder: highlightError
+            ? const OutlineInputBorder(
+                borderSide: BorderSide(color: Colors.red, width: 2),
+              )
+            : null,
       ),
     );
   }

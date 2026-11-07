@@ -11,3 +11,12 @@ String firstName(String? fullName) {
   final first = trimmed.split(RegExp(r'\s+')).first;
   return first.substring(0, 1).toUpperCase() + first.substring(1);
 }
+
+/// Nome curto para saudações mais completas: apenas o primeiro e o último.
+String shortPersonName(String? fullName) {
+  final parts = (fullName ?? '').trim().split(RegExp(r'\s+'))
+    ..removeWhere((part) => part.isEmpty);
+  if (parts.isEmpty) return '';
+  if (parts.length == 1) return parts.first;
+  return '${parts.first} ${parts.last}';
+}

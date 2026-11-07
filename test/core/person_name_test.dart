@@ -25,4 +25,18 @@ void main() {
       expect(firstName('Cadastro Pendente'), '');
     });
   });
+
+  group('shortPersonName', () {
+    test('mantém só o primeiro e o último nome', () {
+      expect(shortPersonName('Márcio Cardoso Santos'), 'Márcio Santos');
+      expect(shortPersonName('Ana Paula de Souza Lima'), 'Ana Lima');
+    });
+
+    test('trata nome simples, espaços e valores vazios', () {
+      expect(shortPersonName('João'), 'João');
+      expect(shortPersonName('  Márcio   Santos  '), 'Márcio Santos');
+      expect(shortPersonName(null), '');
+      expect(shortPersonName('   '), '');
+    });
+  });
 }

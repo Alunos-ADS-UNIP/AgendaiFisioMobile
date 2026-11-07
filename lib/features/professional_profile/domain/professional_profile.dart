@@ -28,6 +28,7 @@ class ProfessionalProfile {
     String? crefito,
     String? phone,
     String? bio,
+    String? specialtyName,
   }) => ProfessionalProfile(
     id: id,
     name: name ?? this.name,
@@ -35,7 +36,7 @@ class ProfessionalProfile {
     crefito: crefito ?? this.crefito,
     phone: phone ?? this.phone,
     bio: bio ?? this.bio,
-    specialtyName: specialtyName,
+    specialtyName: specialtyName ?? this.specialtyName,
     isActive: isActive,
   );
 }
