@@ -125,6 +125,10 @@ class _FakeRepository implements AppointmentRepository {
   }) async => items.first;
 
   @override
+  Future<Appointment> cancelAppointment(String id) async =>
+      items.firstWhere((item) => item.id == id);
+
+  @override
   Future<List<Professional>> fetchProfessionals({
     String? specialtyId,
     bool? active,

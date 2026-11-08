@@ -91,6 +91,22 @@ class AppointmentPreviewRepository implements AppointmentRepository {
   }
 
   @override
+  Future<Appointment> cancelAppointment(String id) async {
+    final index = _items.indexWhere((item) => item.id == id);
+    if (index < 0) {
+      throw const AppointmentException(AppointmentFailure.notFound);
+    }
+    final current = _items[index];
+    if (current.status == AppointmentStatus.cancelled ||
+        current.status == AppointmentStatus.completed) {
+      throw const AppointmentException(AppointmentFailure.conflict);
+    }
+    final cancelled = current.copyWith(status: AppointmentStatus.cancelled);
+    _items[index] = cancelled;
+    return cancelled;
+  }
+
+  @override
   Future<List<Professional>> fetchProfessionals({
     String? specialtyId,
     bool? active,

@@ -56,6 +56,10 @@ class _BookedRepository
   }) => throw UnimplementedError();
 
   @override
+  Future<Appointment> cancelAppointment(String id) =>
+      throw UnimplementedError();
+
+  @override
   Future<List<Professional>> fetchProfessionals({
     String? specialtyId,
     bool? active,

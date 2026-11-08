@@ -64,6 +64,62 @@ void main() {
     },
   );
 
+  testWidgets('paciente confirma e cancela o próprio agendamento', (
+    tester,
+  ) async {
+    final item = Appointment(
+      id: 'appointment-to-cancel',
+      professionalId: 'professional-1',
+      professionalName: 'Dra. Marina Lopes',
+      specialtyName: 'Fisioterapia esportiva',
+      dateTime: DateTime.now().add(const Duration(days: 2)),
+      status: AppointmentStatus.confirmed,
+    );
+    final repository = _FakeRepository([item]);
+    await tester.pumpWidget(
+      MaterialApp(home: AppointmentsPage(repository: repository)),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('Dra. Marina Lopes'));
+    await tester.pumpAndSettle();
+    await tester.drag(find.byType(ListView), const Offset(0, -600));
+    await tester.pumpAndSettle();
+    expect(find.text('Cancelar agendamento'), findsOneWidget);
+
+    await tester.tap(find.text('Cancelar agendamento'));
+    await tester.pumpAndSettle();
+    expect(find.text('Cancelar agendamento?'), findsOneWidget);
+    expect(repository.cancelledIds, isEmpty);
+
+    await tester.tap(find.text('Sim, cancelar'));
+    await tester.pumpAndSettle();
+    expect(repository.cancelledIds, ['appointment-to-cancel']);
+    expect(find.text('Cancelado'), findsOneWidget);
+    expect(find.text('Cancelar agendamento'), findsNothing);
+    expect(find.text('Agendamento cancelado com sucesso.'), findsOneWidget);
+  });
+
+  testWidgets('terapeuta também visualiza a ação de cancelamento', (
+    tester,
+  ) async {
+    await tester.pumpWidget(
+      MaterialApp(
+        home: AppointmentsPage(
+          repository: _FakeRepository([nextAppointment]),
+          professionalView: true,
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('Dra. Marina Lopes'));
+    await tester.pumpAndSettle();
+    await tester.drag(find.byType(ListView), const Offset(0, -600));
+    await tester.pumpAndSettle();
+    expect(find.text('Cancelar agendamento'), findsOneWidget);
+  });
+
   testWidgets('home mostra vazio quando não há consultas futuras', (
     tester,
   ) async {
@@ -100,6 +156,7 @@ void main() {
 class _FakeRepository implements AppointmentRepository {
   _FakeRepository(this.items);
   final List<Appointment> items;
+  final List<String> cancelledIds = [];
 
   @override
   Future<List<Appointment>> fetchAppointments({
@@ -116,6 +173,17 @@ class _FakeRepository implements AppointmentRepository {
     required DateTime dateTime,
     String? observations,
   }) async => items.first;
+
+  @override
+  Future<Appointment> cancelAppointment(String id) async {
+    final index = items.indexWhere((item) => item.id == id);
+    final cancelled = items[index].copyWith(
+      status: AppointmentStatus.cancelled,
+    );
+    items[index] = cancelled;
+    cancelledIds.add(id);
+    return cancelled;
+  }
 
   @override
   Future<List<Professional>> fetchProfessionals({

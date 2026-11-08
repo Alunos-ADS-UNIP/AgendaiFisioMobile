@@ -199,6 +199,67 @@ void main() {
     );
   });
 
+  test(
+    'PATCH cancela agendamento com bearer e interpreta a resposta',
+    () async {
+      late http.Request captured;
+      final repository = AppointmentApiRepository(
+        baseUri: Uri.parse('http://localhost:5048'),
+        tokenProvider: () async => token,
+        client: MockClient((request) async {
+          captured = request;
+          return http.Response(
+            jsonEncode({..._appointmentJson, 'status': 'Cancelado'}),
+            200,
+          );
+        }),
+      );
+
+      final cancelled = await repository.cancelAppointment('appointment-1');
+
+      expect(captured.method, 'PATCH');
+      expect(captured.url.path, '/api/agendamento/appointment-1/cancelar');
+      expect(captured.headers['authorization'], 'Bearer $token');
+      expect(captured.body, isEmpty);
+      expect(cancelled.status, AppointmentStatus.cancelled);
+    },
+  );
+
+  test(
+    'cancelamento preserva a mensagem de conflito enviada pela API',
+    () async {
+      final repository = AppointmentApiRepository(
+        baseUri: Uri.parse('http://localhost:5048'),
+        tokenProvider: () async => token,
+        client: MockClient(
+          (_) async => http.Response(
+            jsonEncode({
+              'erro': 'Agendamentos concluídos não podem ser cancelados.',
+            }),
+            409,
+          ),
+        ),
+      );
+
+      await expectLater(
+        repository.cancelAppointment('appointment-1'),
+        throwsA(
+          isA<AppointmentException>()
+              .having(
+                (error) => error.failure,
+                'failure',
+                AppointmentFailure.conflict,
+              )
+              .having(
+                (error) => error.message,
+                'message',
+                'Agendamentos concluídos não podem ser cancelados.',
+              ),
+        ),
+      );
+    },
+  );
+
   test('401 chama o encerramento global da sessão', () async {
     var expired = false;
     final repository = AppointmentApiRepository(

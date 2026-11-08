@@ -1,10 +1,16 @@
 import 'package:flutter/material.dart';
 
 import '../../../../core/theme/app_spacing.dart';
+import '../../../../core/models/appointment_status.dart';
+import '../../../../core/theme/app_colors.dart';
 import '../../../../core/utils/date_text.dart';
+import '../../../../core/widgets/app_feedback.dart';
+import '../../../../core/widgets/confirm_dialog.dart';
 import '../../../../core/widgets/error_state.dart';
 import '../../../../core/widgets/info_card.dart';
+import '../../../../core/widgets/status_chip.dart';
 import '../../domain/appointment.dart';
+import '../../domain/appointment_failure.dart';
 import '../../domain/appointment_repository.dart';
 
 class AppointmentDetailsPage extends StatefulWidget {
@@ -27,6 +33,7 @@ class AppointmentDetailsPage extends StatefulWidget {
 }
 
 class _AppointmentDetailsPageState extends State<AppointmentDetailsPage> {
+  bool _isCancelling = false;
   late Future<Appointment> _appointment = widget.repository.fetchAppointment(
     widget.appointmentId,
   );
@@ -52,20 +59,81 @@ class _AppointmentDetailsPageState extends State<AppointmentDetailsPage> {
         }
         final item = snapshot.data!;
         if (widget.professionalView) {
-          return _ProfessionalDetails(item: item);
+          return _ProfessionalDetails(
+            item: item,
+            isCancelling: _isCancelling,
+            onCancel: _canCancel(item) ? () => _cancel(item) : null,
+          );
         }
-        return _PatientDetails(item: item);
+        return _PatientDetails(
+          item: item,
+          isCancelling: _isCancelling,
+          onCancel: _canCancel(item) ? () => _cancel(item) : null,
+        );
       },
     ),
   );
+
+  bool _canCancel(Appointment item) =>
+      item.status != AppointmentStatus.cancelled &&
+      item.status != AppointmentStatus.completed;
+
+  Future<void> _cancel(Appointment item) async {
+    if (_isCancelling) return;
+    final confirmed = await showConfirmDialog(
+      context: context,
+      title: 'Cancelar agendamento?',
+      message: 'O horário será liberado e o agendamento continuará no histórico como cancelado.',
+      confirmLabel: 'Sim, cancelar',
+    );
+    if (!confirmed || !mounted) return;
+
+    setState(() => _isCancelling = true);
+    try {
+      final cancelled = await widget.repository.cancelAppointment(item.id);
+      if (!mounted) return;
+      setState(() {
+        _isCancelling = false;
+        _appointment = Future.value(item.copyWith(status: cancelled.status));
+      });
+      AppFeedback.showSuccess(context, 'Agendamento cancelado com sucesso.');
+    } on AppointmentException catch (error) {
+      if (!mounted) return;
+      setState(() => _isCancelling = false);
+      AppFeedback.showError(context, _cancelErrorMessage(error));
+    } catch (_) {
+      if (!mounted) return;
+      setState(() => _isCancelling = false);
+      AppFeedback.showError(
+        context,
+        'Não foi possível cancelar o agendamento. Tente novamente.',
+      );
+    }
+  }
+
+  String _cancelErrorMessage(AppointmentException error) =>
+      error.message ??
+      switch (error.failure) {
+        AppointmentFailure.conflict =>
+          'Esse agendamento já foi cancelado ou não pode mais ser cancelado.',
+        AppointmentFailure.notFound =>
+          'O agendamento não foi encontrado ou não pertence a você.',
+        _ => error.userMessage,
+      };
 }
 
 /// Detalhe da consulta na visão do paciente: agendamento, fisioterapeuta e os
 /// sintomas que ele informou, no mesmo desenho da visão do fisioterapeuta.
 class _PatientDetails extends StatelessWidget {
-  const _PatientDetails({required this.item});
+  const _PatientDetails({
+    required this.item,
+    required this.isCancelling,
+    required this.onCancel,
+  });
 
   final Appointment item;
+  final bool isCancelling;
+  final VoidCallback? onCancel;
 
   @override
   Widget build(BuildContext context) {
@@ -79,6 +147,8 @@ class _PatientDetails extends StatelessWidget {
         InfoCard(
           title: 'Informações do agendamento',
           children: [
+            StatusChip(status: item.status),
+            const SizedBox(height: AppSpacing.md),
             InfoLine(
               icon: Icons.calendar_today_outlined,
               label: 'Data',
@@ -142,6 +212,13 @@ class _PatientDetails extends StatelessWidget {
             ],
           ),
         ],
+        if (onCancel != null) ...[
+          const SizedBox(height: AppSpacing.lg),
+          _CancelAppointmentButton(
+            isLoading: isCancelling,
+            onPressed: onCancel,
+          ),
+        ],
       ],
     );
   }
@@ -152,9 +229,15 @@ class _PatientDetails extends StatelessWidget {
 /// Detalhe da consulta na visão do fisioterapeuta: paciente, horário e relato,
 /// em cartões. Não mostra a especialidade do profissional.
 class _ProfessionalDetails extends StatelessWidget {
-  const _ProfessionalDetails({required this.item});
+  const _ProfessionalDetails({
+    required this.item,
+    required this.isCancelling,
+    required this.onCancel,
+  });
 
   final Appointment item;
+  final bool isCancelling;
+  final VoidCallback? onCancel;
 
   @override
   Widget build(BuildContext context) {
@@ -172,6 +255,8 @@ class _ProfessionalDetails extends StatelessWidget {
         InfoCard(
           title: 'Informações do agendamento',
           children: [
+            StatusChip(status: item.status),
+            const SizedBox(height: AppSpacing.md),
             InfoLine(
               icon: Icons.calendar_today_outlined,
               label: 'Data',
@@ -214,7 +299,51 @@ class _ProfessionalDetails extends StatelessWidget {
             ),
           ],
         ),
+        if (onCancel != null) ...[
+          const SizedBox(height: AppSpacing.lg),
+          _CancelAppointmentButton(
+            isLoading: isCancelling,
+            onPressed: onCancel,
+          ),
+        ],
       ],
     );
   }
+}
+
+class _CancelAppointmentButton extends StatelessWidget {
+  const _CancelAppointmentButton({
+    required this.isLoading,
+    required this.onPressed,
+  });
+
+  final bool isLoading;
+  final VoidCallback? onPressed;
+
+  @override
+  Widget build(BuildContext context) => SizedBox(
+    width: double.infinity,
+    child: OutlinedButton(
+      key: const ValueKey('cancel-appointment-button'),
+      onPressed: isLoading ? null : onPressed,
+      style: OutlinedButton.styleFrom(
+        foregroundColor: AppColors.error,
+        side: const BorderSide(color: AppColors.error),
+        minimumSize: const Size(48, 48),
+      ),
+      child: isLoading
+          ? const SizedBox.square(
+              dimension: 22,
+              child: CircularProgressIndicator(strokeWidth: 2.4),
+            )
+          : const Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Icon(Icons.event_busy_outlined),
+                SizedBox(width: AppSpacing.sm),
+                Text('Cancelar agendamento'),
+              ],
+            ),
+    ),
+  );
 }

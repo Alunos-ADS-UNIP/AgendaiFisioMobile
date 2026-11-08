@@ -211,6 +211,23 @@ class AppointmentApiRepository
   }
 
   @override
+  Future<Appointment> cancelAppointment(String id) async {
+    final response = await _send(
+      'PATCH',
+      '/api/agendamento/${Uri.encodeComponent(id)}/cancelar',
+      authenticated: true,
+    );
+    if (response.statusCode != 200) {
+      _throwForStatus(response.statusCode, message: _errorMessage(response));
+    }
+    try {
+      return _appointmentFromJson(_readMap(jsonDecode(response.body)));
+    } catch (_) {
+      throw const AppointmentException(AppointmentFailure.unexpected);
+    }
+  }
+
+  @override
   Future<List<ScheduleBlock>> fetchScheduleBlocks({
     required DateTime from,
     required DateTime to,
@@ -697,7 +714,21 @@ class AppointmentApiRepository
     AppointmentStatus.missed => 'Falta',
   };
 
-  Never _throwForStatus(int status) {
+  static String? _errorMessage(http.Response response) {
+    try {
+      final decoded = jsonDecode(response.body);
+      if (decoded is! Map) return null;
+      final message = _nullableString(
+        Map<String, dynamic>.from(decoded),
+        const ['erro', 'error', 'message'],
+      )?.trim();
+      return message == null || message.isEmpty ? null : message;
+    } catch (_) {
+      return null;
+    }
+  }
+
+  Never _throwForStatus(int status, {String? message}) {
     throw AppointmentException(switch (status) {
       401 => AppointmentFailure.unauthorized,
       404 => AppointmentFailure.notFound,
@@ -706,7 +737,7 @@ class AppointmentApiRepository
       // 422: o paciente ainda não preencheu os dados obrigatórios do cadastro.
       422 => AppointmentFailure.incompleteProfile,
       _ => AppointmentFailure.unexpected,
-    });
+    }, message: message);
   }
 
   void close() {

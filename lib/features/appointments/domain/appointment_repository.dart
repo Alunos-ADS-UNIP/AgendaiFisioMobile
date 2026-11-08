@@ -46,6 +46,7 @@ abstract interface class AppointmentRepository {
     required DateTime dateTime,
     String? observations,
   });
+  Future<Appointment> cancelAppointment(String id);
   Future<List<Professional>> fetchProfessionals({
     String? specialtyId,
     bool? active,

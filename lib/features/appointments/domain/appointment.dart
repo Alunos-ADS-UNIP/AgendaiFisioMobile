@@ -71,6 +71,7 @@ class Appointment {
   Appointment copyWith({
     String? professionalName,
     String? specialtyName,
+    AppointmentStatus? status,
     ContactInfo? patientInfo,
     ContactInfo? professionalInfo,
     String? professionalCrefito,
@@ -80,7 +81,7 @@ class Appointment {
     professionalId: professionalId,
     professionalName: professionalName ?? this.professionalName,
     dateTime: dateTime,
-    status: status,
+    status: status ?? this.status,
     specialtyName: specialtyName ?? this.specialtyName,
     observations: observations,
     patientName: patientName,
