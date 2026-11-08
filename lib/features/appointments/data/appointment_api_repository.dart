@@ -4,6 +4,7 @@ import 'dart:convert';
 import 'package:http/http.dart' as http;
 
 import '../../../core/models/appointment_status.dart';
+import '../../../core/domain/professional_address.dart';
 import '../../availability/data/appointment_block_availability_repository.dart';
 import '../domain/appointment.dart';
 import '../domain/appointment_failure.dart';
@@ -555,6 +556,10 @@ class AppointmentApiRepository
       'nome',
       'profissionalNome',
     ]);
+    final addressValue = _value(json, const ['endereco', 'address']);
+    final addressJson = addressValue is Map
+        ? Map<String, dynamic>.from(addressValue)
+        : null;
     if (id.isEmpty || name.isEmpty) {
       throw const FormatException('Profissional inválido.');
     }
@@ -579,6 +584,23 @@ class AppointmentApiRepository
       bio: _string(json, const ['bio', 'biografia']),
       photoUrl: _nullableString(json, const ['fotoPerfilUrl', 'photoUrl']),
       isActive: _bool(json, const ['ativo', 'isActive'], fallback: true),
+      address: addressJson == null
+          ? null
+          : ProfessionalAddress(
+              street: _string(addressJson, const ['rua', 'street']),
+              number: _string(addressJson, const ['numero', 'number']),
+              complement: _string(addressJson, const [
+                'complemento',
+                'complement',
+              ]),
+              zipCode: _string(addressJson, const ['cep', 'zipCode']),
+              neighborhood: _string(addressJson, const [
+                'bairro',
+                'neighborhood',
+              ]),
+              city: _string(addressJson, const ['cidade', 'city']),
+              state: _string(addressJson, const ['estado', 'state']),
+            ),
     );
   }
 

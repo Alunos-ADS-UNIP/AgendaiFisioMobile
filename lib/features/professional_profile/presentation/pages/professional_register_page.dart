@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../../../../core/theme/app_spacing.dart';
 import '../../../../core/widgets/app_primary_button.dart';
 import '../../../../core/widgets/app_text_field.dart';
+import '../../../../core/widgets/terms_acceptance_field.dart';
 import '../controllers/professional_register_controller.dart';
 
 /// Cria a conta; a sessão compartilhada conduz o login antes de completar o
@@ -55,6 +56,7 @@ class _ProfessionalRegisterPageState extends State<ProfessionalRegisterPage> {
     final created = await widget.controller.submit(
       email: _email.text.trim(),
       password: _password.text,
+      aceiteLgpd: true,
     );
     if (created && mounted) widget.onRegistered();
   }
@@ -118,6 +120,8 @@ class _ProfessionalRegisterPageState extends State<ProfessionalRegisterPage> {
                 validator: (value) =>
                     value != _password.text ? 'As senhas não coincidem.' : null,
               ),
+              const SizedBox(height: AppSpacing.sm),
+              TermsAcceptanceField(enabled: !widget.controller.isSubmitting),
               if (widget.controller.error != null) ...[
                 const SizedBox(height: AppSpacing.md),
                 Text(

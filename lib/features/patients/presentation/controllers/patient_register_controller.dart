@@ -22,14 +22,24 @@ class PatientRegisterController extends ChangeNotifier {
   bool _emailJaCadastrado = false;
   bool get emailJaCadastrado => _emailJaCadastrado;
 
-  Future<bool> submit({required String email, required String senha}) async {
+  Future<bool> submit({
+    required String email,
+    required String senha,
+    required bool aceiteLgpd,
+  }) async {
     _isSubmitting = true;
     _generalError = null;
     _emailJaCadastrado = false;
     notifyListeners();
 
     try {
-      await _api.register(PatientRegisterRequest(email: email, senha: senha));
+      await _api.register(
+        PatientRegisterRequest(
+          email: email,
+          senha: senha,
+          aceiteLgpd: aceiteLgpd,
+        ),
+      );
       _isSubmitting = false;
       notifyListeners();
       return true;

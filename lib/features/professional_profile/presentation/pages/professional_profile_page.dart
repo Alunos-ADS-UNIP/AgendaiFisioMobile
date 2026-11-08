@@ -283,6 +283,25 @@ class _ProfessionalProfilePageState extends State<ProfessionalProfilePage> {
               ),
             ),
             const SizedBox(height: AppSpacing.lg),
+            ProfileSection(
+              title: 'Local de atendimento',
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  _field('Endereço', profile.address?.line ?? ''),
+                  _field(
+                    'CEP',
+                    profile.address == null
+                        ? ''
+                        : InputMasks.applyMask(
+                            InputMasks.cep,
+                            profile.address!.zipCode,
+                          ),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: AppSpacing.lg),
             AppPrimaryButton(
               label: profile.isPendingCompletion
                   ? 'Completar perfil'

@@ -93,6 +93,16 @@ class _ProfessionalInfoPageState extends State<ProfessionalInfoPage> {
                   ),
                   const SizedBox(height: AppSpacing.md),
                   InfoLine(
+                    icon: Icons.location_on_outlined,
+                    label: 'Local de atendimento',
+                    value:
+                        widget.professional.address?.line.trim().isEmpty ==
+                            false
+                        ? widget.professional.address!.line
+                        : 'Endereço ainda não informado.',
+                  ),
+                  const SizedBox(height: AppSpacing.md),
+                  InfoLine(
                     icon: Icons.description_outlined,
                     label: 'Descrição',
                     value: widget.professional.bio.trim().isEmpty

@@ -94,6 +94,7 @@ void main() {
       find.widgetWithText(TextFormField, 'Confirmar senha'),
       'segredo123',
     );
+    await tester.tap(find.byKey(const Key('terms-acceptance-checkbox')));
     await tester.tap(find.text('Criar conta'));
     await tester.pumpAndSettle();
 

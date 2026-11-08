@@ -15,14 +15,22 @@ class ProfessionalRegisterController extends ChangeNotifier {
   bool get isSubmitting => _isSubmitting;
   String? get error => _error;
 
-  Future<bool> submit({required String email, required String password}) async {
+  Future<bool> submit({
+    required String email,
+    required String password,
+    required bool aceiteLgpd,
+  }) async {
     if (_isSubmitting) return false;
     _isSubmitting = true;
     _error = null;
     notifyListeners();
     try {
       await _api.register(
-        ProfessionalRegisterRequest(email: email, password: password),
+        ProfessionalRegisterRequest(
+          email: email,
+          password: password,
+          aceiteLgpd: aceiteLgpd,
+        ),
       );
       return !_disposed;
     } on ApiException catch (error) {

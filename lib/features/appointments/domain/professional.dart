@@ -1,3 +1,5 @@
+import '../../../core/domain/professional_address.dart';
+
 class Professional {
   const Professional({
     required this.id,
@@ -8,6 +10,7 @@ class Professional {
     this.bio = '',
     this.photoUrl,
     this.isActive = true,
+    this.address,
   });
 
   final String id;
@@ -18,4 +21,5 @@ class Professional {
   final String bio;
   final String? photoUrl;
   final bool isActive;
+  final ProfessionalAddress? address;
 }

@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../../../../core/theme/app_spacing.dart';
 import '../../../../core/widgets/app_primary_button.dart';
 import '../../../../core/widgets/app_text_field.dart';
+import '../../../../core/widgets/terms_acceptance_field.dart';
 import '../controllers/patient_register_controller.dart';
 
 /// Tela de cadastro de conta de Paciente.
@@ -57,6 +58,7 @@ class _PatientRegisterPageState extends State<PatientRegisterPage> {
     final success = await widget.controller.submit(
       email: _emailController.text.trim(),
       senha: _senhaController.text,
+      aceiteLgpd: true,
     );
 
     if (success && mounted) {
@@ -140,6 +142,8 @@ class _PatientRegisterPageState extends State<PatientRegisterPage> {
                   onSubmitted: (_) => _submit(),
                   enabled: !controller.isSubmitting,
                 ),
+                const SizedBox(height: AppSpacing.sm),
+                TermsAcceptanceField(enabled: !controller.isSubmitting),
                 if (controller.generalError != null) ...[
                   const SizedBox(height: AppSpacing.md),
                   _InlineErrorBanner(

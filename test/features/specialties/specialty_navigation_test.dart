@@ -3,6 +3,7 @@ import 'package:flutter_test/flutter_test.dart';
 
 import 'package:agendaifisiomobile/app/app.dart';
 import 'package:agendaifisiomobile/core/network/api_client.dart';
+import 'package:agendaifisiomobile/core/domain/professional_address.dart';
 import 'package:agendaifisiomobile/features/auth/data/auth_api.dart';
 import 'package:agendaifisiomobile/features/auth/data/session_storage.dart';
 import 'package:agendaifisiomobile/features/auth/domain/auth_session.dart';
@@ -146,6 +147,15 @@ class NavigationProfessionalApi extends ProfessionalProfileApi {
       specialtyId: specialty.id,
       specialtyName: specialty.name,
       isActive: true,
+      address: const ProfessionalAddress(
+        street: 'Avenida Paulista',
+        number: '1000',
+        complement: '',
+        zipCode: '01310100',
+        neighborhood: 'Bela Vista',
+        city: 'São Paulo',
+        state: 'SP',
+      ),
     );
   }
 }

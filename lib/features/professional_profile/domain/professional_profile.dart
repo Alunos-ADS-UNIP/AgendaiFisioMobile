@@ -1,3 +1,5 @@
+import '../../../core/domain/professional_address.dart';
+
 /// Dados que a API permite consultar sobre o perfil do profissional logado.
 /// CPF e nascimento não são devolvidos pelo detalhe público.
 class ProfessionalProfile {
@@ -12,6 +14,7 @@ class ProfessionalProfile {
     this.specialtyId,
     required this.specialtyName,
     required this.isActive,
+    this.address,
   });
 
   final String id;
@@ -24,8 +27,10 @@ class ProfessionalProfile {
   final String? specialtyId;
   final String specialtyName;
   final bool isActive;
+  final ProfessionalAddress? address;
 
-  bool get isPendingCompletion => name.trim() == 'Cadastro Pendente';
+  bool get isPendingCompletion =>
+      name.trim() == 'Cadastro Pendente' || address?.isComplete != true;
 
   ProfessionalProfile copyWith({
     String? name,
@@ -34,6 +39,7 @@ class ProfessionalProfile {
     String? bio,
     String? specialtyId,
     String? specialtyName,
+    ProfessionalAddress? address,
   }) => ProfessionalProfile(
     id: id,
     name: name ?? this.name,
@@ -45,6 +51,7 @@ class ProfessionalProfile {
     specialtyName: specialtyName ?? this.specialtyName,
     photoUrl: photoUrl,
     isActive: isActive,
+    address: address ?? this.address,
   );
 
   ProfessionalProfile withPhotoUrl(String? value) => ProfessionalProfile(
@@ -58,5 +65,6 @@ class ProfessionalProfile {
     specialtyId: specialtyId,
     specialtyName: specialtyName,
     isActive: isActive,
+    address: address,
   );
 }

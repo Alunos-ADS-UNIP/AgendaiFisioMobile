@@ -31,6 +31,15 @@ const _detail = {
   'ativo': true,
   'especialidade': null,
   'email': 'fisio@exemplo.com',
+  'endereco': {
+    'rua': 'Avenida Paulista',
+    'numero': '1000',
+    'complemento': 'Conjunto 10',
+    'cep': '01310100',
+    'bairro': 'Bela Vista',
+    'cidade': 'São Paulo',
+    'estado': 'SP',
+  },
 };
 
 ProfessionalUpdateRequest _request({String crefito = 'CREFITO-123'}) =>
@@ -42,6 +51,13 @@ ProfessionalUpdateRequest _request({String crefito = 'CREFITO-123'}) =>
       birthDate: DateTime(1990, 5, 12),
       bio: 'Fisioterapeuta esportiva',
       isActive: false,
+      street: 'Avenida Paulista',
+      number: '1000',
+      complement: 'Conjunto 10',
+      zipCode: '01310-100',
+      neighborhood: 'Bela Vista',
+      city: 'São Paulo',
+      state: 'SP',
     );
 
 http.Response _json(Object value, [int status = 200]) => http.Response(
@@ -64,6 +80,26 @@ void main() {
     expect(InputMasks.applyTelefoneMask('11987654321'), '(11) 98765-4321');
   });
 
+  test('endereço é lido e perfil antigo sem endereço continua pendente', () {
+    final complete = professionalProfileFromJson(_id, 'fisio@exemplo.com', {
+      ..._detail,
+      'nomeCompleto': 'Joana Silva',
+    });
+    expect(complete.address?.isComplete, isTrue);
+    expect(
+      complete.address?.line,
+      'Avenida Paulista, 1000 • Conjunto 10 • Bela Vista • São Paulo - SP',
+    );
+    expect(complete.isPendingCompletion, isFalse);
+
+    final legacy = professionalProfileFromJson(_id, 'fisio@exemplo.com', {
+      ..._detail,
+      'nomeCompleto': 'Joana Silva',
+      'endereco': null,
+    });
+    expect(legacy.isPendingCompletion, isTrue);
+  });
+
   test('cadastro usa tipo Profissional e nunca envia Bearer', () async {
     late http.Request sent;
     final controller = ProfessionalRegisterController(
@@ -79,6 +115,7 @@ void main() {
       await controller.submit(
         email: ' fisio@exemplo.com ',
         password: 'senha-forte',
+        aceiteLgpd: true,
       ),
       isTrue,
     );
@@ -88,6 +125,7 @@ void main() {
       'email': 'fisio@exemplo.com',
       'senha': 'senha-forte',
       'tipoUsuario': 'Profissional',
+      'aceiteLgpd': true,
     });
   });
 
@@ -240,6 +278,13 @@ void main() {
         'telefone': '11987654321',
         'dataNascimento': '1990-05-12',
         'bio': 'Fisioterapeuta esportiva',
+        'rua': 'Avenida Paulista',
+        'numero': '1000',
+        'complemento': 'Conjunto 10',
+        'cep': '01310100',
+        'bairro': 'Bela Vista',
+        'cidade': 'São Paulo',
+        'estado': 'SP',
         'ativo': true,
       });
       expect(controller.profile!.name, 'Joana Silva');
@@ -305,7 +350,7 @@ void main() {
     );
     await tester.enterText(find.widgetWithText(TextFormField, 'Crefito'), '3');
     await tester.enterText(
-      find.widgetWithText(TextFormField, 'Número'),
+      find.widgetWithText(TextFormField, 'Número CREFITO'),
       '100301',
     );
     await tester.ensureVisible(
@@ -351,12 +396,15 @@ void main() {
       ),
     );
     await tester.enterText(find.widgetWithText(TextFormField, 'Crefito'), '3');
-    await tester.enterText(find.widgetWithText(TextFormField, 'Número'), '12');
+    await tester.enterText(
+      find.widgetWithText(TextFormField, 'Número CREFITO'),
+      '12',
+    );
     await tester.pumpAndSettle();
     expect(find.text('De 3 a 6 dígitos'), findsOneWidget);
     final box = tester.getRect(
       find.descendant(
-        of: find.widgetWithText(TextFormField, 'Número'),
+        of: find.widgetWithText(TextFormField, 'Número CREFITO'),
         matching: find.byType(InputDecorator),
       ),
     );
@@ -392,7 +440,10 @@ void main() {
         ),
       ),
     );
-    await tester.enterText(find.widgetWithText(TextFormField, 'Número'), '12');
+    await tester.enterText(
+      find.widgetWithText(TextFormField, 'Número CREFITO'),
+      '12',
+    );
     await tester.pumpAndSettle();
     expect(find.text('De 3 a 6 dígitos'), findsOneWidget);
     expect(find.text('De 1 a 20'), findsNothing);
@@ -444,8 +495,8 @@ void main() {
     expect(field('Data de nascimento').controller!.text, '15/01/1990');
     expect(field('Crefito').enabled, isFalse);
     expect(field('Crefito').controller!.text, '3');
-    expect(field('Número').enabled, isFalse);
-    expect(field('Número').controller!.text, '100301-F');
+    expect(field('Número CREFITO').enabled, isFalse);
+    expect(field('Número CREFITO').controller!.text, '100301-F');
   });
 
   testWidgets('cursor do número do CREFITO fica antes do -F', (tester) async {
@@ -467,7 +518,7 @@ void main() {
         ),
       ),
     );
-    final number = find.widgetWithText(TextFormField, 'Número');
+    final number = find.widgetWithText(TextFormField, 'Número CREFITO');
     await tester.ensureVisible(number);
     await tester.tap(number);
     await tester.pumpAndSettle();
@@ -637,6 +688,49 @@ void main() {
     expect(calls, 0);
   });
 
+  testWidgets('cadastro exige aceite dos termos antes de chamar a API', (
+    tester,
+  ) async {
+    var calls = 0;
+    final controller = ProfessionalRegisterController(
+      _api(
+        MockClient((_) async {
+          calls++;
+          return _json({});
+        }),
+      ),
+    );
+    await tester.pumpWidget(
+      MaterialApp(
+        home: ProfessionalRegisterPage(
+          controller: controller,
+          onRegistered: () {},
+        ),
+      ),
+    );
+    await tester.enterText(
+      find.widgetWithText(TextFormField, 'E-mail'),
+      'fisio@exemplo.com',
+    );
+    await tester.enterText(
+      find.widgetWithText(TextFormField, 'Senha'),
+      'senha-forte',
+    );
+    await tester.enterText(
+      find.widgetWithText(TextFormField, 'Confirmar senha'),
+      'senha-forte',
+    );
+    await tester.ensureVisible(find.text('Criar conta'));
+    await tester.tap(find.text('Criar conta'));
+    await tester.pump();
+
+    expect(
+      find.text('Aceite os Termos de Uso e a Política de Privacidade.'),
+      findsOneWidget,
+    );
+    expect(calls, 0);
+  });
+
   testWidgets('cadastro concluído chama navegação para login', (tester) async {
     var registered = false;
     final controller = ProfessionalRegisterController(
@@ -662,6 +756,7 @@ void main() {
       find.widgetWithText(TextFormField, 'Confirmar senha'),
       'senha-forte',
     );
+    await tester.tap(find.byKey(const Key('terms-acceptance-checkbox')));
     await tester.tap(find.text('Criar conta'));
     await tester.pumpAndSettle();
     expect(registered, isTrue);

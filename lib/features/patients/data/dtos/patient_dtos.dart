@@ -14,15 +14,21 @@ DateTime? _parseDataNascimento(dynamic value) {
 /// Segue exatamente o UsuarioRegisterDTO do backend (email, senha,
 /// tipoUsuario).
 class PatientRegisterRequest {
-  const PatientRegisterRequest({required this.email, required this.senha});
+  const PatientRegisterRequest({
+    required this.email,
+    required this.senha,
+    required this.aceiteLgpd,
+  });
 
   final String email;
   final String senha;
+  final bool aceiteLgpd;
 
   Map<String, dynamic> toJson() => {
     'email': email,
     'senha': senha,
     'tipoUsuario': 'Paciente',
+    'aceiteLgpd': aceiteLgpd,
   };
 }
 

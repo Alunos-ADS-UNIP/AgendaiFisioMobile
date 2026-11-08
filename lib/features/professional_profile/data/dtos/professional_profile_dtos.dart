@@ -1,18 +1,22 @@
 import '../../domain/professional_profile.dart';
+import '../../../../core/domain/professional_address.dart';
 
 class ProfessionalRegisterRequest {
   const ProfessionalRegisterRequest({
     required this.email,
     required this.password,
+    required this.aceiteLgpd,
   });
 
   final String email;
   final String password;
+  final bool aceiteLgpd;
 
   Map<String, dynamic> toJson() => {
     'email': email.trim(),
     'senha': password,
     'tipoUsuario': 'Profissional',
+    'aceiteLgpd': aceiteLgpd,
   };
 }
 
@@ -27,6 +31,13 @@ class ProfessionalUpdateRequest {
     required this.birthDate,
     required this.bio,
     required this.isActive,
+    required this.street,
+    required this.number,
+    required this.complement,
+    required this.zipCode,
+    required this.neighborhood,
+    required this.city,
+    required this.state,
   });
 
   final String name;
@@ -36,6 +47,13 @@ class ProfessionalUpdateRequest {
   final DateTime birthDate;
   final String bio;
   final bool isActive;
+  final String street;
+  final String number;
+  final String complement;
+  final String zipCode;
+  final String neighborhood;
+  final String city;
+  final String state;
 
   Map<String, dynamic> toJson() => {
     'nomeCompleto': name.trim(),
@@ -45,6 +63,13 @@ class ProfessionalUpdateRequest {
     'dataNascimento':
         '${birthDate.year.toString().padLeft(4, '0')}-${birthDate.month.toString().padLeft(2, '0')}-${birthDate.day.toString().padLeft(2, '0')}',
     'bio': bio.trim(),
+    'rua': street.trim(),
+    'numero': number.trim(),
+    'complemento': complement.trim(),
+    'cep': zipCode.replaceAll(RegExp(r'\D'), ''),
+    'bairro': neighborhood.trim(),
+    'cidade': city.trim(),
+    'estado': state.trim().toUpperCase(),
     'ativo': isActive,
   };
 }
@@ -88,6 +113,18 @@ ProfessionalProfile professionalProfileFromJson(
   final specialtyName = specialty is Map
       ? specialty['nome']?.toString() ?? ''
       : '';
+  final addressJson = json['endereco'];
+  final address = addressJson is Map
+      ? ProfessionalAddress(
+          street: addressJson['rua']?.toString() ?? '',
+          number: addressJson['numero']?.toString() ?? '',
+          complement: addressJson['complemento']?.toString() ?? '',
+          zipCode: addressJson['cep']?.toString() ?? '',
+          neighborhood: addressJson['bairro']?.toString() ?? '',
+          city: addressJson['cidade']?.toString() ?? '',
+          state: addressJson['estado']?.toString() ?? '',
+        )
+      : null;
   return ProfessionalProfile(
     id: expectedId,
     name: json['nomeCompleto']?.toString() ?? '',
@@ -99,6 +136,7 @@ ProfessionalProfile professionalProfileFromJson(
     specialtyId: specialtyId,
     specialtyName: specialtyName,
     isActive: json['ativo'] == true,
+    address: address,
   );
 }
 

@@ -8,6 +8,7 @@ import '../../../../core/widgets/error_state.dart';
 import '../../../appointments/domain/appointment_repository.dart';
 import '../../../appointments/domain/specialty.dart';
 import '../../../appointments/presentation/widgets/appointment_specialty_picker_sheet.dart';
+import '../../../patients/data/viacep_client.dart';
 import '../../data/dtos/professional_profile_dtos.dart';
 import '../controllers/professional_profile_controller.dart';
 import '../widgets/profile_section.dart';
@@ -19,6 +20,7 @@ class ProfessionalProfileFormPage extends StatefulWidget {
     required this.onSessionExpired,
     this.onLogout,
     this.specialtyRepository,
+    this.cepLookup,
     super.key,
   });
 
@@ -34,10 +36,15 @@ class ProfessionalProfileFormPage extends StatefulWidget {
   /// mostra o campo Especialidade, reutilizando o seletor já existente.
   final AppointmentRepository? specialtyRepository;
 
+  /// Consulta o CEP e permanece injetável para os testes do formulário.
+  final Future<ViaCepAddress> Function(String cep)? cepLookup;
+
   @override
   State<ProfessionalProfileFormPage> createState() =>
       _ProfessionalProfileFormPageState();
 }
+
+enum _CepStatus { idle, loading, notFound, timeout, failed }
 
 class _ProfessionalProfileFormPageState
     extends State<ProfessionalProfileFormPage> {
@@ -50,6 +57,17 @@ class _ProfessionalProfileFormPageState
   final _birthDateText = TextEditingController();
   final _bio = TextEditingController();
   final _specialtyText = TextEditingController();
+  final _street = TextEditingController();
+  final _number = TextEditingController();
+  final _complement = TextEditingController();
+  final _zipCode = TextEditingController();
+  final _neighborhood = TextEditingController();
+  final _city = TextEditingController();
+  final _state = TextEditingController();
+  late final Future<ViaCepAddress> Function(String cep) _lookupCep =
+      widget.cepLookup ?? ViaCepClient().lookup;
+  _CepStatus _cepStatus = _CepStatus.idle;
+  int _cepRequest = 0;
   Specialty? _specialty;
   DateTime? _birthDate;
   bool _sessionExpiredHandled = false;
@@ -89,11 +107,22 @@ class _ProfessionalProfileFormPageState
       );
       _birthDate = widget.controller.birthDateInSession;
       if (_birthDate != null) _birthDateText.text = _formatDate(_birthDate!);
+      final address = profile.address;
+      if (address != null) {
+        _street.text = address.street;
+        _number.text = address.number;
+        _complement.text = address.complement;
+        _zipCode.text = InputMasks.applyMask(InputMasks.cep, address.zipCode);
+        _neighborhood.text = address.neighborhood;
+        _city.text = address.city;
+        _state.text = address.state;
+      }
     }
   }
 
   @override
   void dispose() {
+    _cepRequest++;
     widget.controller.removeListener(_onChanged);
     _name.dispose();
     _cpf.dispose();
@@ -103,6 +132,13 @@ class _ProfessionalProfileFormPageState
     _birthDateText.dispose();
     _bio.dispose();
     _specialtyText.dispose();
+    _street.dispose();
+    _number.dispose();
+    _complement.dispose();
+    _zipCode.dispose();
+    _neighborhood.dispose();
+    _city.dispose();
+    _state.dispose();
     super.dispose();
   }
 
@@ -139,6 +175,71 @@ class _ProfessionalProfileFormPageState
     if (date == null) return 'Informe uma data válida.';
     return null;
   }
+
+  Future<void> _onCepChanged(String value) async {
+    final digits = InputMasks.digitsOnly(value);
+    final request = ++_cepRequest;
+    if (digits.length != 8) {
+      if (_cepStatus != _CepStatus.idle) {
+        setState(() => _cepStatus = _CepStatus.idle);
+      }
+      return;
+    }
+    setState(() => _cepStatus = _CepStatus.loading);
+    try {
+      final address = await _lookupCep(digits);
+      if (!mounted || request != _cepRequest) return;
+      setState(() {
+        _fillIfNotEmpty(_street, address.rua);
+        _fillIfNotEmpty(_neighborhood, address.bairro);
+        _fillIfNotEmpty(_city, address.cidade);
+        _fillIfNotEmpty(_state, address.estado);
+        _cepStatus = _CepStatus.idle;
+      });
+    } on CepLookupException catch (error) {
+      if (!mounted || request != _cepRequest) return;
+      setState(() {
+        _cepStatus = switch (error.failure) {
+          CepLookupFailure.notFound => _CepStatus.notFound,
+          CepLookupFailure.timeout => _CepStatus.timeout,
+          _ => _CepStatus.failed,
+        };
+      });
+    } catch (_) {
+      if (!mounted || request != _cepRequest) return;
+      setState(() => _cepStatus = _CepStatus.failed);
+    }
+  }
+
+  static void _fillIfNotEmpty(TextEditingController controller, String value) {
+    if (value.isNotEmpty) controller.text = value;
+  }
+
+  Widget _cepFeedback() {
+    final message = switch (_cepStatus) {
+      _CepStatus.notFound =>
+        'CEP não encontrado. Preencha o endereço manualmente.',
+      _CepStatus.timeout =>
+        'A consulta demorou demais. Preencha o endereço manualmente.',
+      _CepStatus.failed =>
+        'Não foi possível consultar o CEP. Preencha manualmente.',
+      _CepStatus.idle || _CepStatus.loading => null,
+    };
+    if (message == null) return const SizedBox.shrink();
+    return Padding(
+      padding: const EdgeInsets.only(top: AppSpacing.xxs),
+      child: Text(
+        message,
+        style: TextStyle(
+          color: Theme.of(context).colorScheme.onSurfaceVariant,
+          fontSize: 12,
+        ),
+      ),
+    );
+  }
+
+  String? _required(String? value) =>
+      value?.trim().isEmpty ?? true ? 'Este campo é obrigatório.' : null;
 
   Future<void> _chooseSpecialty() async {
     final repository = widget.specialtyRepository;
@@ -200,6 +301,13 @@ class _ProfessionalProfileFormPageState
         birthDate: date,
         bio: _bio.text,
         isActive: widget.controller.profile!.isActive,
+        street: _street.text,
+        number: _number.text,
+        complement: _complement.text,
+        zipCode: _zipCode.text,
+        neighborhood: _neighborhood.text,
+        city: _city.text,
+        state: _state.text,
       ),
       specialtyId: _specialty?.id,
       specialtyName: _specialty?.name,
@@ -376,7 +484,7 @@ class _ProfessionalProfileFormPageState
                           ),
                           Expanded(
                             child: AppTextField(
-                              label: 'Número',
+                              label: 'Número CREFITO',
                               controller: _crefito,
                               enabled: !_crefitoLocked,
                               keyboardType: TextInputType.number,
@@ -455,6 +563,109 @@ class _ProfessionalProfileFormPageState
                         validator: (value) => (value?.trim().length ?? 0) > 1000
                             ? 'A bio deve ter até 1000 caracteres.'
                             : null,
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(height: AppSpacing.lg),
+                ProfileSection(
+                  title: 'Local de atendimento',
+                  child: Column(
+                    children: [
+                      AppTextField(
+                        label: 'CEP',
+                        controller: _zipCode,
+                        keyboardType: TextInputType.number,
+                        textInputAction: TextInputAction.next,
+                        inputFormatters: [InputMasks.cepFormatter()],
+                        onChanged: _onCepChanged,
+                        errorText: controller.errorFor('cep'),
+                        validator: (value) =>
+                            InputMasks.digitsOnly(value ?? '').length == 8
+                            ? null
+                            : 'Informe os 8 dígitos do CEP.',
+                        suffixIcon: _cepStatus == _CepStatus.loading
+                            ? const Padding(
+                                padding: EdgeInsets.all(14),
+                                child: SizedBox.square(
+                                  dimension: 20,
+                                  child: CircularProgressIndicator(
+                                    strokeWidth: 2,
+                                  ),
+                                ),
+                              )
+                            : null,
+                      ),
+                      _cepFeedback(),
+                      const SizedBox(height: AppSpacing.md),
+                      AppTextField(
+                        label: 'Rua',
+                        controller: _street,
+                        textCapitalization: TextCapitalization.words,
+                        textInputAction: TextInputAction.next,
+                        errorText: controller.errorFor('rua'),
+                        validator: _required,
+                      ),
+                      const SizedBox(height: AppSpacing.md),
+                      Row(
+                        children: [
+                          Expanded(
+                            child: AppTextField(
+                              label: 'Número do local',
+                              controller: _number,
+                              textInputAction: TextInputAction.next,
+                              errorText: controller.errorFor('numero'),
+                              validator: _required,
+                            ),
+                          ),
+                          const SizedBox(width: AppSpacing.md),
+                          Expanded(
+                            flex: 2,
+                            child: AppTextField(
+                              label: 'Complemento (opcional)',
+                              controller: _complement,
+                              textInputAction: TextInputAction.next,
+                              errorText: controller.errorFor('complemento'),
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: AppSpacing.md),
+                      AppTextField(
+                        label: 'Bairro',
+                        controller: _neighborhood,
+                        textCapitalization: TextCapitalization.words,
+                        textInputAction: TextInputAction.next,
+                        errorText: controller.errorFor('bairro'),
+                        validator: _required,
+                      ),
+                      const SizedBox(height: AppSpacing.md),
+                      Row(
+                        children: [
+                          Expanded(
+                            flex: 2,
+                            child: AppTextField(
+                              label: 'Cidade',
+                              controller: _city,
+                              textCapitalization: TextCapitalization.words,
+                              textInputAction: TextInputAction.next,
+                              errorText: controller.errorFor('cidade'),
+                              validator: _required,
+                            ),
+                          ),
+                          const SizedBox(width: AppSpacing.md),
+                          Expanded(
+                            child: AppTextField(
+                              label: 'UF',
+                              controller: _state,
+                              textCapitalization: TextCapitalization.characters,
+                              errorText: controller.errorFor('estado'),
+                              validator: (value) => value?.trim().length == 2
+                                  ? null
+                                  : 'Use 2 letras.',
+                            ),
+                          ),
+                        ],
                       ),
                     ],
                   ),

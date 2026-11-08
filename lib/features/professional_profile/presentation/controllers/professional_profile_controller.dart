@@ -1,5 +1,6 @@
 import 'package:flutter/foundation.dart';
 
+import '../../../../core/domain/professional_address.dart';
 import '../../../../core/network/api_exception.dart';
 import '../../data/dtos/professional_profile_dtos.dart';
 import '../../data/professional_profile_api.dart';
@@ -119,6 +120,13 @@ class ProfessionalProfileController extends ChangeNotifier {
         birthDate: request.birthDate,
         bio: request.bio,
         isActive: current.isActive,
+        street: request.street,
+        number: request.number,
+        complement: request.complement,
+        zipCode: request.zipCode,
+        neighborhood: request.neighborhood,
+        city: request.city,
+        state: request.state,
       );
       if (specialtyId != null) {
         try {
@@ -140,6 +148,15 @@ class ProfessionalProfileController extends ChangeNotifier {
         phone: safeRequest.phone.replaceAll(RegExp(r'\D'), ''),
         bio: safeRequest.bio.trim(),
         specialtyName: specialtyId != null ? specialtyName : null,
+        address: ProfessionalAddress(
+          street: safeRequest.street.trim(),
+          number: safeRequest.number.trim(),
+          complement: safeRequest.complement.trim(),
+          zipCode: safeRequest.zipCode.replaceAll(RegExp(r'\D'), ''),
+          neighborhood: safeRequest.neighborhood.trim(),
+          city: safeRequest.city.trim(),
+          state: safeRequest.state.trim().toUpperCase(),
+        ),
       );
       _cpfInSession = safeRequest.cpf.replaceAll(RegExp(r'\D'), '');
       _birthDateInSession = safeRequest.birthDate;
