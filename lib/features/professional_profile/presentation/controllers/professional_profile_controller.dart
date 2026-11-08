@@ -22,6 +22,8 @@ class ProfessionalProfileController extends ChangeNotifier {
   String? _submitError;
   Map<String, String> _fieldErrors = {};
   bool _isSubmitting = false;
+  bool _isPhotoSubmitting = false;
+  String? _photoError;
   bool _sessionExpired = false;
   int _generation = 0;
 
@@ -32,6 +34,8 @@ class ProfessionalProfileController extends ChangeNotifier {
   String? get loadError => _loadError;
   String? get submitError => _submitError;
   bool get isSubmitting => _isSubmitting;
+  bool get isPhotoSubmitting => _isPhotoSubmitting;
+  String? get photoError => _photoError;
   bool get isSessionExpired => _sessionExpired;
   bool get canEdit =>
       _status == ProfessionalProfileStatus.content && _profile != null;
@@ -172,6 +176,64 @@ class ProfessionalProfileController extends ChangeNotifier {
       return false;
     } finally {
       _isSubmitting = false;
+      if (generation == _generation) notifyListeners();
+    }
+  }
+
+  Future<bool> updatePhoto(List<int> bytes) async {
+    if (!canEdit || _isPhotoSubmitting) return false;
+    final generation = _generation;
+    final current = _profile!;
+    _isPhotoSubmitting = true;
+    _photoError = null;
+    notifyListeners();
+    try {
+      final url = await _api.updateOwnPhoto(
+        bytes: bytes,
+        fileName: 'foto-perfil.jpg',
+        contentType: 'image/jpeg',
+      );
+      if (generation != _generation || _profile?.id != current.id) return false;
+      _profile = current.withPhotoUrl(url);
+      return true;
+    } on ApiException catch (error) {
+      if (generation != _generation) return false;
+      _sessionExpired = error.isUnauthorized;
+      _photoError = error.message;
+      return false;
+    } catch (_) {
+      if (generation != _generation) return false;
+      _photoError = 'Não foi possível enviar a foto. Tente novamente.';
+      return false;
+    } finally {
+      _isPhotoSubmitting = false;
+      if (generation == _generation) notifyListeners();
+    }
+  }
+
+  Future<bool> removePhoto() async {
+    if (!canEdit || _isPhotoSubmitting) return false;
+    final generation = _generation;
+    final current = _profile!;
+    _isPhotoSubmitting = true;
+    _photoError = null;
+    notifyListeners();
+    try {
+      await _api.removeOwnPhoto();
+      if (generation != _generation || _profile?.id != current.id) return false;
+      _profile = current.withPhotoUrl(null);
+      return true;
+    } on ApiException catch (error) {
+      if (generation != _generation) return false;
+      _sessionExpired = error.isUnauthorized;
+      _photoError = error.message;
+      return false;
+    } catch (_) {
+      if (generation != _generation) return false;
+      _photoError = 'Não foi possível remover a foto. Tente novamente.';
+      return false;
+    } finally {
+      _isPhotoSubmitting = false;
       if (generation == _generation) notifyListeners();
     }
   }

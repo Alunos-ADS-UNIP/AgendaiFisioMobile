@@ -1,4 +1,5 @@
 import 'package:agendaifisiomobile/core/theme/app_theme.dart';
+import 'package:agendaifisiomobile/core/widgets/app_text_field.dart';
 import 'package:agendaifisiomobile/development/appointment_preview_repository.dart';
 import 'package:agendaifisiomobile/features/professional_profile/data/dtos/professional_profile_dtos.dart';
 import 'package:agendaifisiomobile/features/professional_profile/data/professional_profile_api.dart';
@@ -41,6 +42,16 @@ class _FakeApi implements ProfessionalProfileApi {
 
   @override
   Future<void> register(ProfessionalRegisterRequest request) async {}
+
+  @override
+  Future<String> updateOwnPhoto({
+    required List<int> bytes,
+    required String fileName,
+    required String contentType,
+  }) async => 'https://example.invalid/foto.jpg';
+
+  @override
+  Future<void> removeOwnPhoto() async {}
 }
 
 void main() {
@@ -90,7 +101,13 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.text('Especialidade'), findsOneWidget);
 
-    await tester.tap(find.text('Especialidade'));
+    final specialtyField = find.ancestor(
+      of: find.text('Especialidade'),
+      matching: find.byType(AppTextField),
+    );
+    await tester.ensureVisible(specialtyField);
+    await tester.pumpAndSettle();
+    await tester.tap(specialtyField);
     await tester.pumpAndSettle();
     expect(find.text('Escolha uma especialidade'), findsOneWidget);
     await tester.tap(find.text('Fisioterapia esportiva'));

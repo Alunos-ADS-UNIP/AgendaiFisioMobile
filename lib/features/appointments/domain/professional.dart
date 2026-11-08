@@ -6,6 +6,7 @@ class Professional {
     required this.specialtyName,
     this.crefito = '',
     this.bio = '',
+    this.photoUrl,
     this.isActive = true,
   });
 
@@ -15,5 +16,6 @@ class Professional {
   final String specialtyName;
   final String crefito;
   final String bio;
+  final String? photoUrl;
   final bool isActive;
 }

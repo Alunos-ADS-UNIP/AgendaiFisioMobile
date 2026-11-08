@@ -42,6 +42,27 @@ class ProfessionalProfileApi {
     await _client.put('/api/profissional/completar-perfil', request.toJson());
   }
 
+  Future<String> updateOwnPhoto({
+    required List<int> bytes,
+    required String fileName,
+    required String contentType,
+  }) async {
+    final json = await _client.putMultipart(
+      '/api/profissional/me/foto',
+      fieldName: 'arquivo',
+      bytes: bytes,
+      fileName: fileName,
+      contentType: contentType,
+    );
+    final url = json['fotoPerfilUrl']?.toString().trim() ?? '';
+    if (url.isEmpty) {
+      throw const FormatException('A API não devolveu a URL da foto.');
+    }
+    return url;
+  }
+
+  Future<void> removeOwnPhoto() => _client.delete('/api/profissional/me/foto');
+
   /// Escolhe ou troca a especialidade do profissional logado.
   /// PUT /api/profissional/especialidade com {"especialidadeId": "..."}.
   Future<void> updateOwnSpecialty(String specialtyId) async {

@@ -4,6 +4,7 @@ import '../../../../core/theme/app_spacing.dart';
 import '../../../../core/widgets/app_primary_button.dart';
 import '../../../../core/widgets/app_secondary_button.dart';
 import '../../../../core/widgets/info_card.dart';
+import '../../../../core/widgets/profile_avatar.dart';
 import '../../domain/appointment_repository.dart';
 import '../../domain/professional.dart';
 
@@ -54,6 +55,14 @@ class _ProfessionalInfoPageState extends State<ProfessionalInfoPage> {
               builder: (context, snapshot) => ListView(
                 padding: const EdgeInsets.all(AppSpacing.md),
                 children: [
+                  Center(
+                    child: ProfileAvatar(
+                      name: widget.professional.name,
+                      photoUrl: widget.professional.photoUrl,
+                      radius: 52,
+                    ),
+                  ),
+                  const SizedBox(height: AppSpacing.md),
                   Text(
                     'Informações do fisioterapeuta',
                     style: Theme.of(context).textTheme.titleMedium,

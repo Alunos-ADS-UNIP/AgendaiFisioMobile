@@ -1,6 +1,7 @@
 import 'dart:convert';
 
 import 'package:http/http.dart' as http;
+import 'package:http_parser/http_parser.dart';
 
 import 'api_exception.dart';
 import 'auth_header_provider.dart';
@@ -48,6 +49,44 @@ class ApiClient {
     Map<String, dynamic> body, {
     bool authenticated = true,
   }) => _sendMap('PUT', path, body: body, authenticated: authenticated);
+
+  Future<void> delete(String path, {bool authenticated = true}) async {
+    await request('DELETE', path, authenticated: authenticated);
+  }
+
+  Future<Map<String, dynamic>> putMultipart(
+    String path, {
+    required String fieldName,
+    required List<int> bytes,
+    required String fileName,
+    required String contentType,
+    bool authenticated = true,
+  }) async {
+    final base = Uri.parse(baseUrl);
+    final uri = base.resolve(path);
+    if (uri.origin != base.origin) {
+      throw ArgumentError.value(path, 'path', 'A rota saiu da origem da API.');
+    }
+    final headers = await _buildHeaders(authenticated: authenticated)
+      ..remove('Content-Type');
+    final request = http.MultipartRequest('PUT', uri)
+      ..followRedirects = false
+      ..headers.addAll(headers)
+      ..files.add(
+        http.MultipartFile.fromBytes(
+          fieldName,
+          bytes,
+          filename: fileName,
+          contentType: MediaType.parse(contentType),
+        ),
+      );
+    final response = _decodeResponse(
+      await http.Response.fromStream(await _client.send(request)),
+    );
+    return response.body is Map<String, dynamic>
+        ? response.body! as Map<String, dynamic>
+        : <String, dynamic>{};
+  }
 
   Future<ApiClientResponse> request(
     String method,

@@ -560,6 +560,7 @@ class AppointmentApiRepository
                 : _string(specialtyMap, const ['nome', 'name'])),
       crefito: _string(json, const ['crefito']),
       bio: _string(json, const ['bio', 'biografia']),
+      photoUrl: _nullableString(json, const ['fotoPerfilUrl', 'photoUrl']),
       isActive: _bool(json, const ['ativo', 'isActive'], fallback: true),
     );
   }

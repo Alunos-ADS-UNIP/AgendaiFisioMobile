@@ -526,6 +526,7 @@ class _NewAppointmentPageState extends State<NewAppointmentPage> {
                   ? (_specialty?.name ?? '')
                   : item.specialtyName,
               crefito: item.crefito,
+              photoUrl: item.photoUrl,
               isActive: item.isActive,
               onInfo: () => _openProfessionalInfo(item),
               onTap: () => setState(() {

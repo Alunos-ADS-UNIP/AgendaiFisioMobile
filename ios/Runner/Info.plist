@@ -31,6 +31,10 @@
 		<key>NSAllowsLocalNetworking</key>
 		<true/>
 	</dict>
+	<key>NSCameraUsageDescription</key>
+	<string>Usamos a câmera para cadastrar sua foto de perfil profissional.</string>
+	<key>NSPhotoLibraryUsageDescription</key>
+	<string>Usamos sua galeria para selecionar sua foto de perfil profissional.</string>
 	<key>UIApplicationSceneManifest</key>
 	<dict>
 		<key>UIApplicationSupportsMultipleScenes</key>

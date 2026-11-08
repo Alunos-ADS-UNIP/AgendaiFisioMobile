@@ -8,6 +8,7 @@ class ProfessionalProfile {
     required this.crefito,
     required this.phone,
     required this.bio,
+    this.photoUrl,
     this.specialtyId,
     required this.specialtyName,
     required this.isActive,
@@ -19,6 +20,7 @@ class ProfessionalProfile {
   final String crefito;
   final String phone;
   final String bio;
+  final String? photoUrl;
   final String? specialtyId;
   final String specialtyName;
   final bool isActive;
@@ -41,6 +43,20 @@ class ProfessionalProfile {
     bio: bio ?? this.bio,
     specialtyId: specialtyId ?? this.specialtyId,
     specialtyName: specialtyName ?? this.specialtyName,
+    photoUrl: photoUrl,
+    isActive: isActive,
+  );
+
+  ProfessionalProfile withPhotoUrl(String? value) => ProfessionalProfile(
+    id: id,
+    name: name,
+    email: email,
+    crefito: crefito,
+    phone: phone,
+    bio: bio,
+    photoUrl: value,
+    specialtyId: specialtyId,
+    specialtyName: specialtyName,
     isActive: isActive,
   );
 }

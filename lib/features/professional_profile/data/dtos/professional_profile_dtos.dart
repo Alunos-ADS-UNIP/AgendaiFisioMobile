@@ -95,8 +95,14 @@ ProfessionalProfile professionalProfileFromJson(
     crefito: json['crefito']?.toString() ?? '',
     phone: json['telefone']?.toString() ?? '',
     bio: json['bio']?.toString() ?? '',
+    photoUrl: _nullableText(json['fotoPerfilUrl']),
     specialtyId: specialtyId,
     specialtyName: specialtyName,
     isActive: json['ativo'] == true,
   );
+}
+
+String? _nullableText(Object? value) {
+  final text = value?.toString().trim() ?? '';
+  return text.isEmpty ? null : text;
 }

@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../theme/app_colors.dart';
 import '../theme/app_radius.dart';
 import '../theme/app_spacing.dart';
+import 'profile_avatar.dart';
 
 class ProfessionalCard extends StatelessWidget {
   const ProfessionalCard({
@@ -10,6 +11,7 @@ class ProfessionalCard extends StatelessWidget {
     required this.specialty,
     required this.crefito,
     required this.isActive,
+    this.photoUrl,
     this.isSelected = false,
     this.onTap,
     this.onInfo,
@@ -20,6 +22,7 @@ class ProfessionalCard extends StatelessWidget {
   final String specialty;
   final String crefito;
   final bool isActive;
+  final String? photoUrl;
   final bool isSelected;
   final VoidCallback? onTap;
 
@@ -48,13 +51,10 @@ class ProfessionalCard extends StatelessWidget {
           child: Row(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              CircleAvatar(
-                radius: 24,
-                backgroundColor: AppColors.secondaryLight,
-                child: Icon(
-                  isSelected ? Icons.check : Icons.person_outline,
-                  color: AppColors.secondary,
-                ),
+              ProfileAvatar(
+                name: name,
+                photoUrl: photoUrl,
+                selected: isSelected,
               ),
               const SizedBox(width: AppSpacing.sm),
               Expanded(

@@ -117,6 +117,70 @@ void main() {
     expect(controller.birthDateInSession, isNull);
   });
 
+  test(
+    'envia e remove a foto usando as rotas do próprio profissional',
+    () async {
+      final requests = <http.Request>[];
+      final controller = ProfessionalProfileController(
+        _api(
+          MockClient((request) async {
+            requests.add(request);
+            if (request.url.path == '/api/auth/me') return _json(_session);
+            if (request.url.path == '/api/profissional/$_id') {
+              return _json({..._detail, 'nomeCompleto': 'Joana Silva'});
+            }
+            if (request.url.path == '/api/profissional/me' &&
+                request.method == 'GET') {
+              return _json({'cpf': '', 'dataNascimento': null});
+            }
+            if (request.url.path == '/api/profissional/me/foto' &&
+                request.method == 'PUT') {
+              return _json({
+                'mensagem': 'Foto atualizada.',
+                'fotoPerfilUrl': 'https://s3.example/foto-assinada.jpg',
+              });
+            }
+            if (request.url.path == '/api/profissional/me/foto' &&
+                request.method == 'DELETE') {
+              return http.Response('', 204);
+            }
+            return _json({}, 404);
+          }),
+        ),
+      );
+
+      await controller.load();
+      expect(await controller.updatePhoto([1, 2, 3]), isTrue);
+      expect(
+        controller.profile!.photoUrl,
+        'https://s3.example/foto-assinada.jpg',
+      );
+      final upload = requests.firstWhere(
+        (request) =>
+            request.method == 'PUT' &&
+            request.url.path == '/api/profissional/me/foto',
+      );
+      expect(upload.headers['authorization'], 'Bearer token-de-teste');
+      expect(
+        upload.headers['content-type'],
+        startsWith('multipart/form-data;'),
+      );
+      expect(upload.body, contains('name="arquivo"'));
+      expect(upload.body, contains('filename="foto-perfil.jpg"'));
+
+      expect(await controller.removePhoto(), isTrue);
+      expect(controller.profile!.photoUrl, isNull);
+      expect(
+        requests.any(
+          (request) =>
+              request.method == 'DELETE' &&
+              request.url.path == '/api/profissional/me/foto',
+        ),
+        isTrue,
+      );
+    },
+  );
+
   test('erros de validação ficam associados ao campo enviado', () async {
     final controller = ProfessionalProfileController(
       _api(
