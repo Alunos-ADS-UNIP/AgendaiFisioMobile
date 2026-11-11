@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../theme/app_radius.dart';
+import '../theme/app_spacing.dart';
 
 class AppPrimaryButton extends StatelessWidget {
   const AppPrimaryButton({
@@ -20,10 +21,18 @@ class AppPrimaryButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final canPress = onPressed != null && !isLoading;
+    final colorScheme = Theme.of(context).colorScheme;
     final child = isLoading
-        ? const SizedBox.square(
+        ? SizedBox.square(
             dimension: 22,
-            child: CircularProgressIndicator(strokeWidth: 2.4),
+            child: CircularProgressIndicator(
+              // O botao fica desabilitado durante a espera; a cor primaria
+              // continua visivel sobre o fundo desabilitado do Material.
+              color: colorScheme.primary,
+              strokeWidth: 2.4,
+              semanticsLabel: 'Carregando',
+            ),
           )
         : Row(
             mainAxisSize: MainAxisSize.min,
@@ -35,14 +44,27 @@ class AppPrimaryButton extends StatelessWidget {
           );
 
     final button = FilledButton(
-      onPressed: isLoading ? null : onPressed,
+      onPressed: canPress ? onPressed : null,
       style: FilledButton.styleFrom(
-        minimumSize: const Size(48, 48),
+        minimumSize: const Size(
+          AppSpacing.minimumTouchTarget,
+          AppSpacing.minimumTouchTarget,
+        ),
         shape: const RoundedRectangleBorder(borderRadius: AppRadius.medium),
       ),
       child: child,
     );
 
-    return expand ? SizedBox(width: double.infinity, child: button) : button;
+    final accessibleButton = Semantics(
+      button: true,
+      enabled: canPress,
+      liveRegion: isLoading,
+      label: isLoading ? '$label. Carregando.' : label,
+      child: ExcludeSemantics(child: button),
+    );
+
+    return expand
+        ? SizedBox(width: double.infinity, child: accessibleButton)
+        : accessibleButton;
   }
 }

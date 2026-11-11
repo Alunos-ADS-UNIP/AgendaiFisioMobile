@@ -385,67 +385,78 @@ class _NewAppointmentPageState extends State<NewAppointmentPage> {
                     }),
       ),
     ),
-    body: _loading
-        ? const Center(child: CircularProgressIndicator())
-        : _missingProfileFields.isNotEmpty
-        ? EmptyState(
-            title: 'Complete seu perfil',
-            message:
-                'Para agendar, falta preencher: ${_missingProfileFields.join(', ')}.',
-            icon: Icons.person_outline,
-            actionLabel: 'Completar perfil',
-            onAction: () => Navigator.pop(context, completeProfileResult),
-          )
-        : _error != null && _specialties.isEmpty
-        ? ErrorState(message: _error!, onRetry: _loadInitialData)
-        : SafeArea(
-            child: ListView(
-              padding: const EdgeInsets.fromLTRB(
-                AppSpacing.md,
-                AppSpacing.md,
-                AppSpacing.md,
-                104,
-              ),
-              children: [
-                Text(
-                  'Etapa ${_step + 1} de 3',
-                  style: Theme.of(context).textTheme.labelLarge,
-                ),
-                const SizedBox(height: AppSpacing.xs),
-                LinearProgressIndicator(value: (_step + 1) / 3),
-                const SizedBox(height: AppSpacing.md),
-                if (_step == 0) _specialtyStep(context),
-                if (_step == 1) _professionalStep(context),
-                if (_step == 2) _reviewStep(context),
-                if (_error != null) ...[
-                  const SizedBox(height: AppSpacing.sm),
-                  Semantics(
-                    liveRegion: true,
-                    child: Text(
-                      _error!,
-                      style: TextStyle(
-                        color: Theme.of(context).colorScheme.error,
+    body: Column(
+      children: [
+        Expanded(
+          child: _loading
+              ? const Center(child: CircularProgressIndicator())
+              : _missingProfileFields.isNotEmpty
+              ? EmptyState(
+                  title: 'Complete seu perfil',
+                  message:
+                      'Para agendar, falta preencher: ${_missingProfileFields.join(', ')}.',
+                  icon: Icons.person_outline,
+                  actionLabel: 'Completar perfil',
+                  onAction: () => Navigator.pop(context, completeProfileResult),
+                )
+              : _error != null && _specialties.isEmpty
+              ? ErrorState(message: _error!, onRetry: _loadInitialData)
+              : SafeArea(
+                  bottom: false,
+                  child: ListView(
+                    padding: const EdgeInsets.all(AppSpacing.md),
+                    children: [
+                      Text(
+                        'Etapa ${_step + 1} de 3',
+                        style: Theme.of(context).textTheme.labelLarge,
                       ),
-                    ),
+                      const SizedBox(height: AppSpacing.xs),
+                      LinearProgressIndicator(value: (_step + 1) / 3),
+                      const SizedBox(height: AppSpacing.md),
+                      if (_step == 0) _specialtyStep(context),
+                      if (_step == 1) _professionalStep(context),
+                      if (_step == 2) _reviewStep(context),
+                      if (_error != null) ...[
+                        const SizedBox(height: AppSpacing.sm),
+                        Semantics(
+                          liveRegion: true,
+                          child: Text(
+                            _error!,
+                            style: TextStyle(
+                              color: Theme.of(context).colorScheme.error,
+                            ),
+                          ),
+                        ),
+                      ],
+                      if (_step == 2) ...[
+                        const SizedBox(height: AppSpacing.lg),
+                        _actionButton(),
+                      ],
+                    ],
                   ),
-                ],
-              ],
-            ),
-          ),
-    floatingActionButtonLocation: FloatingActionButtonLocation.centerFloat,
-    // O botão aparece direto, sem girar nem crescer.
-    floatingActionButtonAnimator: FloatingActionButtonAnimator.noAnimation,
-    floatingActionButton: _loading || (_error != null && _specialties.isEmpty)
-        ? null
-        : SizedBox(
-            width: MediaQuery.sizeOf(context).width - (AppSpacing.md * 2),
+                ),
+        ),
+        if (!_loading &&
+            !(_error != null && _specialties.isEmpty) &&
+            _step != 2)
+          SafeArea(
+            top: false,
             child: Material(
-              elevation: 6,
-              color: Colors.transparent,
-              borderRadius: const BorderRadius.all(Radius.circular(12)),
-              child: _actionButton(),
+              color: Theme.of(context).scaffoldBackgroundColor,
+              elevation: 8,
+              child: Padding(
+                padding: const EdgeInsets.fromLTRB(
+                  AppSpacing.md,
+                  AppSpacing.sm,
+                  AppSpacing.md,
+                  AppSpacing.md,
+                ),
+                child: _actionButton(),
+              ),
             ),
           ),
+      ],
+    ),
   );
 
   Widget _actionButton() {

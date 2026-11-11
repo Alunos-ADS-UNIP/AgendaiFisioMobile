@@ -18,17 +18,26 @@ class PatientRegisterRequest {
     required this.email,
     required this.senha,
     required this.aceiteLgpd,
+    required this.dataNascimento,
+    required this.consentimentoResponsavelLegal,
+    this.nomeResponsavelLegal,
   });
 
   final String email;
   final String senha;
   final bool aceiteLgpd;
+  final DateTime dataNascimento;
+  final bool consentimentoResponsavelLegal;
+  final String? nomeResponsavelLegal;
 
   Map<String, dynamic> toJson() => {
     'email': email,
     'senha': senha,
     'tipoUsuario': 'Paciente',
     'aceiteLgpd': aceiteLgpd,
+    'dataNascimento': dataNascimento.toIso8601String().split('T').first,
+    'consentimentoResponsavelLegal': consentimentoResponsavelLegal,
+    'nomeResponsavelLegal': nomeResponsavelLegal?.trim(),
   };
 }
 

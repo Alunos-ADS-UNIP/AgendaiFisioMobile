@@ -13,8 +13,10 @@ abstract final class AppColors {
 
   static const textPrimary = Color(0xFF0F172A);
   static const textSecondary = Color(0xFF475569);
-  static const textDisabled = Color(0xFF94A3B8);
-  static const border = Color(0xFFCBD5E1);
+  // Mantemos textos e contornos auxiliares bem visiveis em fundo branco.
+  // Isso ajuda principalmente quem usa brilho baixo ou tem baixa visao.
+  static const textDisabled = Color(0xFF64748B);
+  static const border = Color(0xFF94A3B8);
   static const divider = Color(0xFFE2E8F0);
 
   static const success = Color(0xFF15803D);

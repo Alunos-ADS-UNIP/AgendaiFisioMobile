@@ -15,6 +15,10 @@ class ProfessionalRegisterController extends ChangeNotifier {
   bool get isSubmitting => _isSubmitting;
   String? get error => _error;
 
+  Map<String, String> _fieldErrors = const {};
+  Map<String, String> get fieldErrors => Map.unmodifiable(_fieldErrors);
+  String? fieldError(String field) => _fieldErrors[field];
+
   Future<bool> submit({
     required String email,
     required String password,
@@ -23,6 +27,7 @@ class ProfessionalRegisterController extends ChangeNotifier {
     if (_isSubmitting) return false;
     _isSubmitting = true;
     _error = null;
+    _fieldErrors = const {};
     notifyListeners();
     try {
       await _api.register(
@@ -34,7 +39,12 @@ class ProfessionalRegisterController extends ChangeNotifier {
       );
       return !_disposed;
     } on ApiException catch (error) {
-      if (!_disposed) _error = error.message;
+      if (!_disposed) {
+        _fieldErrors = _registrationFieldErrors(error);
+        _error = _fieldErrors.isEmpty
+            ? error.message
+            : 'Revise os campos destacados abaixo e tente novamente.';
+      }
       return false;
     } catch (_) {
       if (!_disposed) {
@@ -45,6 +55,45 @@ class ProfessionalRegisterController extends ChangeNotifier {
       _isSubmitting = false;
       if (!_disposed) notifyListeners();
     }
+  }
+
+  void clearFieldError(String field) {
+    if (!_fieldErrors.containsKey(field)) return;
+    _fieldErrors = Map.of(_fieldErrors)..remove(field);
+    if (_fieldErrors.isEmpty &&
+        _error == 'Revise os campos destacados abaixo e tente novamente.') {
+      _error = null;
+    }
+    if (!_disposed) notifyListeners();
+  }
+
+  Map<String, String> _registrationFieldErrors(ApiException exception) {
+    final result = <String, String>{};
+    final aliases = <String, String>{
+      'email': 'email',
+      'senha': 'senha',
+      'password': 'senha',
+      'aceitelgpd': 'aceiteLgpd',
+    };
+
+    exception.fieldErrors?.forEach((key, value) {
+      final normalized = key.split('.').last.toLowerCase();
+      final field = aliases[normalized];
+      if (field != null) result[field] = value;
+    });
+
+    if (result.isNotEmpty) return result;
+
+    final message = exception.message;
+    final lower = message.toLowerCase();
+    if (lower.contains('e-mail') || lower.contains('email')) {
+      result['email'] = message;
+    } else if (lower.contains('senha')) {
+      result['senha'] = message;
+    } else if (lower.contains('termos') || lower.contains('lgpd')) {
+      result['aceiteLgpd'] = message;
+    }
+    return result;
   }
 
   @override

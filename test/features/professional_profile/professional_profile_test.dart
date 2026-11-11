@@ -679,10 +679,12 @@ void main() {
       find.widgetWithText(TextFormField, 'Confirmar senha'),
       '123',
     );
-    await tester.tap(find.text('Criar conta'));
+    final createButton = find.widgetWithText(AppPrimaryButton, 'Criar conta');
+    await tester.ensureVisible(createButton);
+    await tester.tap(createButton);
     await tester.pump();
     expect(
-      find.text('A senha precisa ter pelo menos 6 caracteres.'),
+      find.text('A senha precisa ter pelo menos 8 caracteres.'),
       findsOneWidget,
     );
     expect(calls, 0);
@@ -756,9 +758,108 @@ void main() {
       find.widgetWithText(TextFormField, 'Confirmar senha'),
       'senha-forte',
     );
+    await tester.ensureVisible(
+      find.byKey(const Key('terms-acceptance-checkbox')),
+    );
     await tester.tap(find.byKey(const Key('terms-acceptance-checkbox')));
-    await tester.tap(find.text('Criar conta'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const Key('accept-terms-button')));
+    await tester.pumpAndSettle();
+    final createButton = find.widgetWithText(AppPrimaryButton, 'Criar conta');
+    await tester.ensureVisible(createButton);
+    await tester.tap(createButton);
     await tester.pumpAndSettle();
     expect(registered, isTrue);
+  });
+
+  testWidgets('cadastro mostra erros do servidor junto aos campos', (
+    tester,
+  ) async {
+    final controller = ProfessionalRegisterController(
+      _api(
+        MockClient(
+          (_) async => _json({
+            'title': 'Corrija os campos indicados.',
+            'errors': {
+              'Email': ['Informe outro e-mail.'],
+              'AceiteLgpd': ['Confirme novamente os termos de uso.'],
+            },
+          }, 400),
+        ),
+      ),
+    );
+    await tester.pumpWidget(
+      MaterialApp(
+        home: ProfessionalRegisterPage(
+          controller: controller,
+          onRegistered: () {},
+        ),
+      ),
+    );
+    await tester.enterText(
+      find.widgetWithText(TextFormField, 'E-mail'),
+      'fisio@exemplo.com',
+    );
+    await tester.enterText(
+      find.widgetWithText(TextFormField, 'Senha'),
+      'senha-forte',
+    );
+    await tester.enterText(
+      find.widgetWithText(TextFormField, 'Confirmar senha'),
+      'senha-forte',
+    );
+    final terms = find.byKey(const Key('terms-acceptance-checkbox'));
+    await tester.ensureVisible(terms);
+    await tester.tap(terms);
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const Key('accept-terms-button')));
+    await tester.pumpAndSettle();
+    final createButton = find.widgetWithText(AppPrimaryButton, 'Criar conta');
+    await tester.ensureVisible(createButton);
+    await tester.tap(createButton);
+    await tester.pumpAndSettle();
+
+    expect(find.text('Informe outro e-mail.'), findsOneWidget);
+    expect(find.text('Confirme novamente os termos de uso.'), findsOneWidget);
+
+    await tester.enterText(
+      find.widgetWithText(TextFormField, 'E-mail'),
+      'outro@exemplo.com',
+    );
+    await tester.pump();
+    expect(find.text('Informe outro e-mail.'), findsNothing);
+    expect(find.text('Confirme novamente os termos de uso.'), findsOneWidget);
+  });
+
+  testWidgets('cadastro profissional cabe com texto a 200% em 320 px', (
+    tester,
+  ) async {
+    tester.view.physicalSize = const Size(320, 700);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+    final controller = ProfessionalRegisterController(
+      _api(MockClient((_) async => _json({'mensagem': 'Criado'}))),
+    );
+    await tester.pumpWidget(
+      MaterialApp(
+        builder: (context, child) => MediaQuery(
+          data: MediaQuery.of(context)
+              .copyWith(textScaler: const TextScaler.linear(2)),
+          child: child!,
+        ),
+        home: ProfessionalRegisterPage(
+          controller: controller,
+          onRegistered: () {},
+        ),
+      ),
+    );
+    expect(tester.takeException(), isNull);
+    await tester.drag(
+      find.byType(SingleChildScrollView),
+      const Offset(0, -1400),
+    );
+    await tester.pumpAndSettle();
+    expect(tester.takeException(), isNull);
   });
 }

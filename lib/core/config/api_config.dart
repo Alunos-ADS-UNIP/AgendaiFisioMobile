@@ -1,6 +1,8 @@
 abstract final class ApiConfig {
   /// API ASP.NET publicada no MonsterASP.NET.
-  static const cloudBaseUrl = 'https://agendaifisio.runasp.net';
+  // Temporário: o endpoint HTTPS do MonsterASP.NET ainda encerra o handshake.
+  // Voltar para https assim que o certificado do domínio estiver ativo.
+  static const cloudBaseUrl = 'http://agendaifisio.runasp.net';
 
   static const _configuredBaseUrl = String.fromEnvironment('API_BASE_URL');
 

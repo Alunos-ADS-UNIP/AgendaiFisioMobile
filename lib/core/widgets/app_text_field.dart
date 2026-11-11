@@ -1,11 +1,16 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
+import '../theme/app_colors.dart';
+import '../theme/app_radius.dart';
+
 class AppTextField extends StatelessWidget {
   const AppTextField({
     required this.label,
     this.controller,
+    this.focusNode,
     this.hint,
+    this.helperText,
     this.prefixIcon,
     this.suffixIcon,
     this.keyboardType,
@@ -31,12 +36,16 @@ class AppTextField extends StatelessWidget {
     this.prefixText,
     this.highlightError = false,
     this.suffixText,
+    this.autocorrect = true,
+    this.enableSuggestions = true,
     super.key,
   });
 
   final String label;
   final TextEditingController? controller;
+  final FocusNode? focusNode;
   final String? hint;
+  final String? helperText;
   final IconData? prefixIcon;
   final Widget? suffixIcon;
   final TextInputType? keyboardType;
@@ -61,11 +70,14 @@ class AppTextField extends StatelessWidget {
   final String? prefixText;
   final bool highlightError;
   final String? suffixText;
+  final bool autocorrect;
+  final bool enableSuggestions;
 
   @override
   Widget build(BuildContext context) {
     return TextFormField(
       controller: controller,
+      focusNode: focusNode,
       keyboardType: keyboardType,
       textInputAction: textInputAction,
       validator: validator,
@@ -80,22 +92,29 @@ class AppTextField extends StatelessWidget {
       onTap: onTap,
       textCapitalization: textCapitalization,
       autovalidateMode: autovalidateMode,
+      autocorrect: autocorrect,
+      enableSuggestions: enableSuggestions,
+      scrollPadding: const EdgeInsets.fromLTRB(24, 24, 24, 120),
       decoration: InputDecoration(
         labelText: label,
         hintText: hint,
+        helperText: helperText,
         prefixIcon: prefixIcon == null ? null : Icon(prefixIcon),
         prefixText: prefixText,
         suffixIcon: suffixIcon,
         suffixText: suffixText,
         errorText: errorText,
+        errorMaxLines: 3,
         enabledBorder: highlightError
             ? const OutlineInputBorder(
-                borderSide: BorderSide(color: Colors.red),
+                borderRadius: AppRadius.medium,
+                borderSide: BorderSide(color: AppColors.error, width: 1.5),
               )
             : null,
         focusedBorder: highlightError
             ? const OutlineInputBorder(
-                borderSide: BorderSide(color: Colors.red, width: 2),
+                borderRadius: AppRadius.medium,
+                borderSide: BorderSide(color: AppColors.error, width: 2),
               )
             : null,
       ),

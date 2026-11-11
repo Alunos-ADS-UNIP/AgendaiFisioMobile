@@ -30,6 +30,17 @@
 	<dict>
 		<key>NSAllowsLocalNetworking</key>
 		<true/>
+		<!-- Exceção temporária até o certificado HTTPS do MonsterASP.NET ser ativado. -->
+		<key>NSExceptionDomains</key>
+		<dict>
+			<key>agendaifisio.runasp.net</key>
+			<dict>
+				<key>NSExceptionAllowsInsecureHTTPLoads</key>
+				<true/>
+				<key>NSIncludesSubdomains</key>
+				<true/>
+			</dict>
+		</dict>
 	</dict>
 	<key>NSCameraUsageDescription</key>
 	<string>Usamos a câmera para cadastrar sua foto de perfil profissional.</string>
